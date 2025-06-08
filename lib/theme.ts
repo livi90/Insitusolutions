@@ -1,4 +1,4 @@
-// Paleta de colores para In-Situ Solutions
+// Paleta de colores mejorada para In-Situ Solutions
 export const theme = {
   // Colores principales de la marca
   brand: {
@@ -8,42 +8,67 @@ export const theme = {
     light: "#EFF6FF", // Azul muy claro
   },
 
-  // Colores para roles específicos
+  // Colores para roles específicos con mejor contraste
   roles: {
     oficial_almacen: {
       primary: "#1E40AF", // Azul oscuro
       secondary: "#2563EB",
       light: "#DBEAFE",
-      gradient: "from-blue-600 to-blue-700",
-      hover: "from-blue-700 to-blue-800",
+      bg: "#1E40AF",
+      text: "#FFFFFF",
+      lightBg: "#EBF8FF",
+      lightText: "#1E40AF",
+      gradient: "role-oficial-almacen",
+      css: "bg-blue-600 text-white",
+      hoverCss: "hover:bg-blue-700",
     },
     transportista: {
       primary: "#047857", // Verde
       secondary: "#059669",
       light: "#D1FAE5",
-      gradient: "from-green-600 to-green-700",
-      hover: "from-green-700 to-green-800",
+      bg: "#047857",
+      text: "#FFFFFF",
+      lightBg: "#ECFDF5",
+      lightText: "#047857",
+      gradient: "role-transportista",
+      css: "bg-green-600 text-white",
+      hoverCss: "hover:bg-green-700",
     },
     encargado_obra: {
-      primary: "#B45309", // Naranja
-      secondary: "#D97706",
+      primary: "#D97706", // Naranja
+      secondary: "#F59E0B",
       light: "#FEF3C7",
-      gradient: "from-orange-500 to-orange-600",
-      hover: "from-orange-600 to-orange-700",
+      bg: "#D97706",
+      text: "#FFFFFF",
+      lightBg: "#FFFBEB",
+      lightText: "#D97706",
+      gradient: "role-encargado-obra",
+      css: "bg-orange-600 text-white",
+      hoverCss: "hover:bg-orange-700",
     },
     operario_maquinaria: {
-      primary: "#6D28D9", // Púrpura
-      secondary: "#7C3AED",
+      primary: "#7C3AED", // Púrpura
+      secondary: "#8B5CF6",
       light: "#EDE9FE",
-      gradient: "from-purple-600 to-purple-700",
-      hover: "from-purple-700 to-purple-800",
+      bg: "#7C3AED",
+      text: "#FFFFFF",
+      lightBg: "#F5F3FF",
+      lightText: "#7C3AED",
+      gradient: "role-operario-maquinaria",
+      css: "bg-purple-600 text-white",
+      hoverCss: "hover:bg-purple-700",
     },
     peon_logistica: {
-      primary: "#0F766E", // Teal
-      secondary: "#0D9488",
+      primary: "#0D9488", // Teal
+      secondary: "#14B8A6",
       light: "#CCFBF1",
-      gradient: "from-teal-600 to-teal-700",
-      hover: "from-teal-700 to-teal-800",
+      bg: "#0D9488",
+      text: "#FFFFFF",
+      lightBg: "#F0FDFA",
+      lightText: "#0D9488",
+      gradient: "role-peon-logistica",
+      css: "bg-teal-600 text-white",
+      hoverCss: "hover:bg-teal-700",
     },
   },
 
@@ -100,15 +125,6 @@ export const theme = {
     high: "bg-orange-500 text-white",
     urgent: "bg-red-500 text-white",
   },
-
-  // Gradientes
-  gradients: {
-    primary: "bg-gradient-to-r from-blue-600 to-indigo-700",
-    secondary: "bg-gradient-to-r from-indigo-500 to-purple-600",
-    header: "bg-gradient-to-r from-blue-700 to-indigo-800",
-    sidebar: "bg-gradient-to-b from-gray-800 to-gray-900",
-    card: "bg-gradient-to-br from-white to-gray-50",
-  },
 }
 
 // Función para obtener el color de rol
@@ -163,4 +179,9 @@ export function getRoleDescription(role: string) {
     default:
       return ""
   }
+}
+
+// Función para obtener clases CSS responsivas
+export function getResponsiveClasses(baseClasses: string, mobileClasses?: string) {
+  return `${baseClasses} ${mobileClasses ? `sm:${baseClasses} ${mobileClasses}` : ""}`
 }
