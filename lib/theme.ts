@@ -35,16 +35,16 @@ export const theme = {
       hoverCss: "hover:bg-green-700",
     },
     encargado_obra: {
-      primary: "#D97706", // Naranja
-      secondary: "#F59E0B",
+      primary: "#F97316", // Naranja más vibrante
+      secondary: "#FB923C",
       light: "#FEF3C7",
-      bg: "#D97706",
+      bg: "#F97316",
       text: "#FFFFFF",
-      lightBg: "#FFFBEB",
-      lightText: "#D97706",
+      lightBg: "#FFF7ED",
+      lightText: "#C2410C",
       gradient: "role-encargado-obra",
-      css: "bg-orange-600 text-white",
-      hoverCss: "hover:bg-orange-700",
+      css: "bg-orange-500 text-white",
+      hoverCss: "hover:bg-orange-600",
     },
     operario_maquinaria: {
       primary: "#7C3AED", // Púrpura
@@ -59,16 +59,16 @@ export const theme = {
       hoverCss: "hover:bg-purple-700",
     },
     peon_logistica: {
-      primary: "#0D9488", // Teal
-      secondary: "#14B8A6",
-      light: "#CCFBF1",
-      bg: "#0D9488",
+      primary: "#0EA5E9", // Azul cyan más vibrante
+      secondary: "#38BDF8",
+      light: "#E0F2FE",
+      bg: "#0EA5E9",
       text: "#FFFFFF",
-      lightBg: "#F0FDFA",
-      lightText: "#0D9488",
+      lightBg: "#F0F9FF",
+      lightText: "#0369A1",
       gradient: "role-peon-logistica",
-      css: "bg-teal-600 text-white",
-      hoverCss: "hover:bg-teal-700",
+      css: "bg-sky-500 text-white",
+      hoverCss: "hover:bg-sky-600",
     },
   },
 
