@@ -18,7 +18,7 @@ export const theme = {
       text: "#FFFFFF",
       lightBg: "#EBF8FF",
       lightText: "#1E40AF",
-      gradient: "role-oficial-almacen",
+      gradient: "from-blue-600 to-blue-700",
       css: "bg-blue-600 text-white",
       hoverCss: "hover:bg-blue-700",
     },
@@ -30,7 +30,7 @@ export const theme = {
       text: "#FFFFFF",
       lightBg: "#ECFDF5",
       lightText: "#047857",
-      gradient: "role-transportista",
+      gradient: "from-green-600 to-green-700",
       css: "bg-green-600 text-white",
       hoverCss: "hover:bg-green-700",
     },
@@ -42,7 +42,7 @@ export const theme = {
       text: "#FFFFFF",
       lightBg: "#FFF7ED",
       lightText: "#C2410C",
-      gradient: "role-encargado-obra",
+      gradient: "from-orange-500 to-orange-600",
       css: "bg-orange-500 text-white",
       hoverCss: "hover:bg-orange-600",
     },
@@ -54,7 +54,7 @@ export const theme = {
       text: "#FFFFFF",
       lightBg: "#F5F3FF",
       lightText: "#7C3AED",
-      gradient: "role-operario-maquinaria",
+      gradient: "from-purple-600 to-purple-700",
       css: "bg-purple-600 text-white",
       hoverCss: "hover:bg-purple-700",
     },
@@ -66,7 +66,7 @@ export const theme = {
       text: "#FFFFFF",
       lightBg: "#F0F9FF",
       lightText: "#0369A1",
-      gradient: "role-peon-logistica",
+      gradient: "from-sky-500 to-sky-600",
       css: "bg-sky-500 text-white",
       hoverCss: "hover:bg-sky-600",
     },
@@ -184,4 +184,22 @@ export function getRoleDescription(role: string) {
 // Función para obtener clases CSS responsivas
 export function getResponsiveClasses(baseClasses: string, mobileClasses?: string) {
   return `${baseClasses} ${mobileClasses ? `sm:${baseClasses} ${mobileClasses}` : ""}`
+}
+
+// Función para obtener el gradiente completo del header
+export function getRoleHeaderClass(role: string) {
+  switch (role) {
+    case "oficial_almacen":
+      return "bg-gradient-to-r from-blue-600 to-blue-700"
+    case "transportista":
+      return "bg-gradient-to-r from-green-600 to-green-700"
+    case "encargado_obra":
+      return "bg-gradient-to-r from-orange-500 to-orange-600"
+    case "operario_maquinaria":
+      return "bg-gradient-to-r from-purple-600 to-purple-700"
+    case "peon_logistica":
+      return "bg-gradient-to-r from-sky-500 to-sky-600"
+    default:
+      return "bg-gradient-to-r from-blue-600 to-blue-700"
+  }
 }
