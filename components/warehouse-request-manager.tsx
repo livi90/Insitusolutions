@@ -20,7 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Package, Clock, CheckCircle } from "lucide-react"
+import { Plus, Package, Clock, CheckCircle, Upload, X, Eye } from "lucide-react"
 import { useEffect } from "react"
 
 interface WarehouseRequestManagerProps {
@@ -33,7 +33,11 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
   const { toast } = useToast()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [workSites, setWorkSites] = useState<WorkSite[]>([])
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [showImageModal, setShowImageModal] = useState<string | null>(null)
   const [newRequest, setNewRequest] = useState({
     title: "",
     description: "",
@@ -56,17 +60,99 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
     }
   }
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validar tipo de archivo
+      if (!file.type.startsWith("image/")) {
+        toast({
+          title: "Error",
+          description: "Por favor selecciona un archivo de imagen válido",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "Error",
+          description: "La imagen debe ser menor a 5MB",
+          variant: "destructive",
+        })
+        return
+      }
+
+      setSelectedImage(file)
+
+      // Crear preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingImage(true)
+
+      // Generar nombre único para el archivo
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+      const filePath = `warehouse-requests/${fileName}`
+
+      // Subir archivo a Supabase Storage
+      const { data, error } = await supabase.storage.from("warehouse-images").upload(filePath, file)
+
+      if (error) {
+        console.error("Error uploading image:", error)
+        return null
+      }
+
+      // Obtener URL pública
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("warehouse-images").getPublicUrl(filePath)
+
+      return publicUrl
+    } catch (error) {
+      console.error("Error uploading image:", error)
+      return null
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      let imageUrl = null
+
+      // Subir imagen si hay una seleccionada
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage)
+        if (!imageUrl) {
+          toast({
+            title: "Error",
+            description: "No se pudo subir la imagen. Intenta de nuevo.",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+      }
+
       const { error } = await supabase.from("warehouse_requests").insert({
         title: newRequest.title,
         description: newRequest.description,
         quantity: Number.parseInt(newRequest.quantity),
         work_site_id: newRequest.work_site_id || null,
         requested_by: userProfile.id,
+        image_url: imageUrl,
       })
 
       if (error) throw error
@@ -76,12 +162,15 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
         description: "La solicitud de almacén ha sido creada exitosamente",
       })
 
+      // Limpiar formulario
       setNewRequest({
         title: "",
         description: "",
         quantity: "",
         work_site_id: "",
       })
+      setSelectedImage(null)
+      setImagePreview(null)
       setShowCreateDialog(false)
       onUpdate()
     } catch (error: any) {
@@ -113,6 +202,11 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
         variant: "destructive",
       })
     }
+  }
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
   }
 
   const getStatusIcon = (status: string) => {
@@ -173,7 +267,7 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
                 Nueva Solicitud
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Crear Solicitud de Almacén</DialogTitle>
                 <DialogDescription>Completa los detalles de lo que necesitas del almacén</DialogDescription>
@@ -228,8 +322,55 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Creando..." : "Crear Solicitud"}
+
+                {/* Sección de imagen */}
+                <div className="space-y-2">
+                  <Label htmlFor="image">Imagen (Opcional)</Label>
+                  <div className="space-y-3">
+                    {!imagePreview ? (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                        <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                        <p className="text-sm text-gray-600 mb-2">Adjunta una imagen de referencia</p>
+                        <Input
+                          id="image"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageSelect}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => document.getElementById("image")?.click()}
+                        >
+                          Seleccionar Imagen
+                        </Button>
+                        <p className="text-xs text-gray-500 mt-1">Máximo 5MB - JPG, PNG, GIF</p>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <img
+                          src={imagePreview || "/placeholder.svg"}
+                          alt="Preview"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-2 right-2"
+                          onClick={removeSelectedImage}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Button type="submit" disabled={loading || uploadingImage} className="w-full">
+                  {loading ? "Creando..." : uploadingImage ? "Subiendo imagen..." : "Crear Solicitud"}
                 </Button>
               </form>
             </DialogContent>
@@ -270,13 +411,38 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    <strong>Cantidad:</strong> {request.quantity}
-                  </p>
-                  <p className="text-sm">
-                    <strong>Solicitado:</strong> {new Date(request.created_at).toLocaleString()}
-                  </p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <p>
+                      <strong>Cantidad:</strong> {request.quantity}
+                    </p>
+                    <p>
+                      <strong>Solicitado:</strong> {new Date(request.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  {/* Mostrar imagen si existe */}
+                  {request.image_url && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Imagen adjunta:</Label>
+                      <div className="relative inline-block">
+                        <img
+                          src={request.image_url || "/placeholder.svg"}
+                          alt="Imagen de la solicitud"
+                          className="w-24 h-24 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setShowImageModal(request.image_url!)}
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                          onClick={() => setShowImageModal(request.image_url!)}
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {userProfile.role === "oficial_almacen" && request.status === "pending" && (
@@ -302,6 +468,24 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
           ))
         )}
       </div>
+
+      {/* Modal para ver imagen completa */}
+      {showImageModal && (
+        <Dialog open={!!showImageModal} onOpenChange={() => setShowImageModal(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Imagen de la solicitud</DialogTitle>
+            </DialogHeader>
+            <div className="flex justify-center">
+              <img
+                src={showImageModal || "/placeholder.svg"}
+                alt="Imagen completa"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

@@ -89,6 +89,7 @@ export type WarehouseRequest = {
   requested_by: string
   approved_by?: string
   work_site_id?: string
+  image_url?: string
   approved_at?: string
   completed_at?: string
   notes?: string
