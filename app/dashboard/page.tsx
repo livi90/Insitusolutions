@@ -20,7 +20,7 @@ import { NotificationCenter } from "@/components/notification-center"
 import { WorkSiteManager } from "@/components/worksite-manager"
 import { WarehouseRequestManager } from "@/components/warehouse-request-manager"
 import { WorkAssignmentManager } from "@/components/work-assignment-manager"
-import { getRoleLabel, getRoleColor, getRoleHeaderClass } from "@/lib/theme"
+import { getRoleLabel, getRoleColor } from "@/lib/theme"
 import { DeliveryAssignmentsView } from "@/components/delivery-assignments-view"
 
 export default function Dashboard() {
@@ -41,6 +41,36 @@ export default function Dashboard() {
     pendingAssignments: 0,
   })
   const [error, setError] = useState<string | null>(null)
+
+  // Función para obtener el estilo del header según el rol
+  const getHeaderStyle = (role: string) => {
+    switch (role) {
+      case "oficial_almacen":
+        return {
+          background: "linear-gradient(to right, #2563eb, #1d4ed8)",
+        }
+      case "transportista":
+        return {
+          background: "linear-gradient(to right, #059669, #047857)",
+        }
+      case "encargado_obra":
+        return {
+          background: "linear-gradient(to right, #f97316, #ea580c)",
+        }
+      case "operario_maquinaria":
+        return {
+          background: "linear-gradient(to right, #7c3aed, #6d28d9)",
+        }
+      case "peon_logistica":
+        return {
+          background: "linear-gradient(to right, #0ea5e9, #0284c7)",
+        }
+      default:
+        return {
+          background: "linear-gradient(to right, #2563eb, #1d4ed8)",
+        }
+    }
+  }
 
   useEffect(() => {
     const checkUser = async () => {
@@ -179,9 +209,6 @@ export default function Dashboard() {
         setDeliveries([])
       }
 
-      // Fetch other data with similar error handling...
-      // (keeping the same logic but with better error handling)
-
       // Calculate stats
       const totalDeliveries = deliveries?.length || 0
       const pendingDeliveries = deliveries?.filter((d) => d.status === "pending" || d.status === "assigned").length || 0
@@ -290,14 +317,13 @@ export default function Dashboard() {
   const showAssignments = ["operario_maquinaria", "peon_logistica"].includes(profile.role)
   const showAssignmentsView = ["oficial_almacen", "encargado_obra"].includes(profile.role)
 
-  // Obtener el color del rol y la clase del header
+  // Obtener el color del rol
   const roleColor = getRoleColor(profile.role)
-  const headerClass = getRoleHeaderClass(profile.role)
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header Responsive con gradiente correcto */}
-      <div className={`${headerClass} text-white shadow-md`}>
+      {/* Header Responsive con estilo inline */}
+      <div style={getHeaderStyle(profile.role)} className="text-white shadow-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-3 sm:py-4">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -358,9 +384,7 @@ export default function Dashboard() {
               <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
                   <CardTitle className="text-xs sm:text-sm font-medium">Total Entregas</CardTitle>
-                  <Package
-                    className={`h-4 w-4 sm:h-5 sm:w-5 ${roleColor.css.includes("blue") ? "text-blue-600" : roleColor.css.includes("green") ? "text-green-600" : roleColor.css.includes("orange") ? "text-orange-600" : roleColor.css.includes("purple") ? "text-purple-600" : "text-sky-600"}`}
-                  />
+                  <Package className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0">
                   <div className="text-xl sm:text-2xl font-bold">{stats.totalDeliveries}</div>
@@ -371,9 +395,7 @@ export default function Dashboard() {
               <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
                   <CardTitle className="text-xs sm:text-sm font-medium">Pendientes</CardTitle>
-                  <Truck
-                    className={`h-4 w-4 sm:h-5 sm:w-5 ${roleColor.css.includes("blue") ? "text-blue-600" : roleColor.css.includes("green") ? "text-green-600" : roleColor.css.includes("orange") ? "text-orange-600" : roleColor.css.includes("purple") ? "text-purple-600" : "text-sky-600"}`}
-                  />
+                  <Truck className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0">
                   <div className="text-xl sm:text-2xl font-bold">{stats.pendingDeliveries}</div>
@@ -387,9 +409,7 @@ export default function Dashboard() {
             <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
                 <CardTitle className="text-xs sm:text-sm font-medium">Tareas</CardTitle>
-                <Clipboard
-                  className={`h-4 w-4 sm:h-5 sm:w-5 ${roleColor.css.includes("blue") ? "text-blue-600" : roleColor.css.includes("green") ? "text-green-600" : roleColor.css.includes("orange") ? "text-orange-600" : roleColor.css.includes("purple") ? "text-purple-600" : "text-sky-600"}`}
-                />
+                <Clipboard className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold">{stats.pendingAssignments}</div>
@@ -414,9 +434,7 @@ export default function Dashboard() {
           <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
               <CardTitle className="text-xs sm:text-sm font-medium">Notificaciones</CardTitle>
-              <Bell
-                className={`h-4 w-4 sm:h-5 sm:w-5 ${roleColor.css.includes("blue") ? "text-blue-600" : roleColor.css.includes("green") ? "text-green-600" : roleColor.css.includes("orange") ? "text-orange-600" : roleColor.css.includes("purple") ? "text-purple-600" : "text-sky-600"}`}
-              />
+              <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
             </CardHeader>
             <CardContent className="p-3 sm:p-6 pt-0">
               <div className="text-xl sm:text-2xl font-bold">{stats.unreadNotifications}</div>
