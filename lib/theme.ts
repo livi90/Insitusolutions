@@ -1,151 +1,56 @@
-// Paleta de colores mejorada para In-Situ Solutions
 export const theme = {
-  // Colores principales de la marca
-  brand: {
-    primary: "#0F52BA", // Azul In-Situ
-    secondary: "#1E40AF", // Azul oscuro
-    accent: "#3B82F6", // Azul claro
-    light: "#EFF6FF", // Azul muy claro
-  },
-
-  // Colores para roles específicos con mejor contraste
   roles: {
     oficial_almacen: {
-      primary: "#1E40AF", // Azul oscuro
-      secondary: "#2563EB",
-      light: "#DBEAFE",
-      bg: "#1E40AF",
-      text: "#FFFFFF",
-      lightBg: "#EBF8FF",
-      lightText: "#1E40AF",
-      gradient: "from-blue-600 to-blue-700",
-      css: "bg-blue-600 text-white",
-      hoverCss: "hover:bg-blue-700",
+      primary: "#2563eb",
+      secondary: "#1d4ed8",
+      accent: "#3b82f6",
+      css: "bg-blue-100 text-blue-800",
     },
     transportista: {
-      primary: "#047857", // Verde
-      secondary: "#059669",
-      light: "#D1FAE5",
-      bg: "#047857",
-      text: "#FFFFFF",
-      lightBg: "#ECFDF5",
-      lightText: "#047857",
-      gradient: "from-green-600 to-green-700",
-      css: "bg-green-600 text-white",
-      hoverCss: "hover:bg-green-700",
+      primary: "#059669",
+      secondary: "#047857",
+      accent: "#10b981",
+      css: "bg-green-100 text-green-800",
     },
     encargado_obra: {
-      primary: "#F97316", // Naranja más vibrante
-      secondary: "#FB923C",
-      light: "#FEF3C7",
-      bg: "#F97316",
-      text: "#FFFFFF",
-      lightBg: "#FFF7ED",
-      lightText: "#C2410C",
-      gradient: "from-orange-500 to-orange-600",
-      css: "bg-orange-500 text-white",
-      hoverCss: "hover:bg-orange-600",
+      primary: "#f97316",
+      secondary: "#ea580c",
+      accent: "#fb923c",
+      css: "bg-orange-100 text-orange-800",
     },
     operario_maquinaria: {
-      primary: "#7C3AED", // Púrpura
-      secondary: "#8B5CF6",
-      light: "#EDE9FE",
-      bg: "#7C3AED",
-      text: "#FFFFFF",
-      lightBg: "#F5F3FF",
-      lightText: "#7C3AED",
-      gradient: "from-purple-600 to-purple-700",
-      css: "bg-purple-600 text-white",
-      hoverCss: "hover:bg-purple-700",
+      primary: "#7c3aed",
+      secondary: "#6d28d9",
+      accent: "#8b5cf6",
+      css: "bg-purple-100 text-purple-800",
     },
     peon_logistica: {
-      primary: "#0EA5E9", // Azul cyan más vibrante
-      secondary: "#38BDF8",
-      light: "#E0F2FE",
-      bg: "#0EA5E9",
-      text: "#FFFFFF",
-      lightBg: "#F0F9FF",
-      lightText: "#0369A1",
-      gradient: "from-sky-500 to-sky-600",
-      css: "bg-sky-500 text-white",
-      hoverCss: "hover:bg-sky-600",
+      primary: "#0ea5e9",
+      secondary: "#0284c7",
+      accent: "#38bdf8",
+      css: "bg-sky-100 text-sky-800",
     },
   },
-
-  // Colores para estados
   status: {
-    pending: {
-      bg: "bg-yellow-100",
-      text: "text-yellow-800",
-      border: "border-yellow-200",
-      icon: "text-yellow-600",
-    },
-    assigned: {
-      bg: "bg-blue-100",
-      text: "text-blue-800",
-      border: "border-blue-200",
-      icon: "text-blue-600",
-    },
-    in_progress: {
-      bg: "bg-indigo-100",
-      text: "text-indigo-800",
-      border: "border-indigo-200",
-      icon: "text-indigo-600",
-    },
-    in_transit: {
-      bg: "bg-purple-100",
-      text: "text-purple-800",
-      border: "border-purple-200",
-      icon: "text-purple-600",
-    },
-    delivered: {
-      bg: "bg-green-100",
-      text: "text-green-800",
-      border: "border-green-200",
-      icon: "text-green-600",
-    },
-    completed: {
-      bg: "bg-green-100",
-      text: "text-green-800",
-      border: "border-green-200",
-      icon: "text-green-600",
-    },
-    cancelled: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      border: "border-red-200",
-      icon: "text-red-600",
-    },
-  },
-
-  // Colores para prioridades
-  priority: {
-    low: "bg-gray-500 text-white",
-    normal: "bg-blue-500 text-white",
-    high: "bg-orange-500 text-white",
-    urgent: "bg-red-500 text-white",
+    pending: "bg-yellow-100 text-yellow-800",
+    assigned: "bg-blue-100 text-blue-800",
+    in_progress: "bg-purple-100 text-purple-800",
+    in_transit: "bg-purple-100 text-purple-800",
+    delivered: "bg-green-100 text-green-800",
+    completed: "bg-gray-100 text-gray-800",
+    approved: "bg-green-100 text-green-800",
+    rejected: "bg-red-100 text-red-800",
   },
 }
 
-// Función para obtener el color de rol
 export function getRoleColor(role: string) {
-  const roleKey = role as keyof typeof theme.roles
-  return theme.roles[roleKey] || theme.roles.transportista
+  return theme.roles[role as keyof typeof theme.roles] || theme.roles.transportista
 }
 
-// Función para obtener el color de estado
 export function getStatusColor(status: string) {
-  const statusKey = status as keyof typeof theme.status
-  return theme.status[statusKey] || theme.status.pending
+  return theme.status[status as keyof typeof theme.status] || theme.status.pending
 }
 
-// Función para obtener el color de prioridad
-export function getPriorityColor(priority: string) {
-  const priorityKey = priority as keyof typeof theme.priority
-  return theme.priority[priorityKey] || theme.priority.normal
-}
-
-// Función para obtener el nombre del rol
 export function getRoleLabel(role: string) {
   switch (role) {
     case "oficial_almacen":
@@ -163,43 +68,19 @@ export function getRoleLabel(role: string) {
   }
 }
 
-// Función para obtener la descripción del rol
 export function getRoleDescription(role: string) {
   switch (role) {
     case "oficial_almacen":
-      return "Gestiona inventario, entregas y coordina operaciones"
+      return "Gestiona inventario, entregas y coordina operaciones logísticas"
     case "transportista":
-      return "Realiza entregas y transporta materiales"
+      return "Realiza entregas y transporta materiales entre ubicaciones"
     case "encargado_obra":
-      return "Supervisa obras y gestiona solicitudes"
+      return "Supervisa obras, solicita materiales y coordina trabajadores"
     case "operario_maquinaria":
-      return "Opera grúas, excavadoras y maquinaria pesada"
+      return "Opera y mantiene equipos y maquinaria especializada"
     case "peon_logistica":
-      return "Apoya en descarga, señalización y logística"
+      return "Apoya en tareas de carga, descarga y organización de materiales"
     default:
-      return ""
-  }
-}
-
-// Función para obtener clases CSS responsivas
-export function getResponsiveClasses(baseClasses: string, mobileClasses?: string) {
-  return `${baseClasses} ${mobileClasses ? `sm:${baseClasses} ${mobileClasses}` : ""}`
-}
-
-// Función para obtener el gradiente completo del header
-export function getRoleHeaderClass(role: string) {
-  switch (role) {
-    case "oficial_almacen":
-      return "bg-gradient-to-r from-blue-600 to-blue-700"
-    case "transportista":
-      return "bg-gradient-to-r from-green-600 to-green-700"
-    case "encargado_obra":
-      return "bg-gradient-to-r from-orange-500 to-orange-600"
-    case "operario_maquinaria":
-      return "bg-gradient-to-r from-purple-600 to-purple-700"
-    case "peon_logistica":
-      return "bg-gradient-to-r from-sky-500 to-sky-600"
-    default:
-      return "bg-gradient-to-r from-blue-600 to-blue-700"
+      return "Usuario del sistema"
   }
 }

@@ -2,347 +2,224 @@
 
 import { useState, useEffect } from "react"
 import { supabase, type UserProfile } from "@/lib/supabase"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Settings, Users, AlertTriangle, Shield, RefreshCw } from "lucide-react"
-import { theme, getRoleLabel } from "@/lib/theme"
+import { Input } from "@/components/ui/input"
+import { useToast } from "@/hooks/use-toast"
+import { Settings, Users, Loader2 } from "lucide-react"
 
 interface WorkerSelectorProps {
-  deliveryId: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  deliveryId: string | null
+  userProfile: UserProfile
   onWorkersAssigned: () => void
-  onClose: () => void
 }
 
-interface WorkerWithAssignment {
-  worker: UserProfile
-  selected: boolean
-  assignmentType: "machinery" | "logistics"
-  specialInstructions: string
-  safetyRequirements: string
-}
-
-export function WorkerSelector({ deliveryId, onWorkersAssigned, onClose }: WorkerSelectorProps) {
-  const [workers, setWorkers] = useState<WorkerWithAssignment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [assigning, setAssigning] = useState(false)
+export function WorkerSelector({
+  open,
+  onOpenChange,
+  deliveryId,
+  userProfile,
+  onWorkersAssigned,
+}: WorkerSelectorProps) {
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [workers, setWorkers] = useState<{ id: string; name: string; role: string }[]>([])
+  const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
+  const [taskTitle, setTaskTitle] = useState("")
+  const [taskDescription, setTaskDescription] = useState("")
 
   useEffect(() => {
-    fetchAvailableWorkers()
-  }, [])
+    if (open && deliveryId) {
+      fetchWorkers()
+      setTaskTitle(`Trabajo para entrega ${deliveryId.substring(0, 8)}`)
+      setTaskDescription("Apoyo en la entrega de materiales")
+    }
+  }, [open, deliveryId])
 
-  const fetchAvailableWorkers = async () => {
+  const fetchWorkers = async () => {
     setLoading(true)
     try {
-      console.log("Fetching available workers...")
-
-      const { data: workersData, error } = await supabase
+      const { data, error } = await supabase
         .from("user_profiles")
-        .select("*")
+        .select("id, full_name, role")
         .in("role", ["operario_maquinaria", "peon_logistica"])
         .order("full_name")
 
-      if (error) {
-        console.error("Error fetching workers:", error)
-        throw error
-      }
+      if (error) throw error
 
-      console.log("Workers found:", workersData)
-
-      if (!workersData || workersData.length === 0) {
-        console.log("No workers found, creating demo workers...")
-        // Si no hay trabajadores, mostrar mensaje y opción para crearlos
-        setWorkers([])
-        return
-      }
-
-      const workersWithAssignment: WorkerWithAssignment[] = workersData.map((worker) => ({
-        worker,
-        selected: false,
-        assignmentType: worker.role === "operario_maquinaria" ? "machinery" : "logistics",
-        specialInstructions: "",
-        safetyRequirements: getDefaultSafetyRequirements(worker.role),
-      }))
-
-      setWorkers(workersWithAssignment)
-    } catch (error) {
+      setWorkers(
+        data.map((worker) => ({
+          id: worker.id,
+          name: worker.full_name,
+          role: worker.role,
+        })),
+      )
+    } catch (error: any) {
       console.error("Error fetching workers:", error)
+      toast({
+        title: "Error",
+        description: `Error al cargar trabajadores: ${error.message}`,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const createDemoWorkers = async () => {
+  const handleAssignWorkers = async () => {
+    if (!deliveryId || selectedWorkers.length === 0) {
+      toast({
+        title: "Error",
+        description: "Selecciona al menos un trabajador",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setLoading(true)
     try {
-      console.log("Creating demo workers...")
+      // Crear asignaciones de trabajo para cada trabajador seleccionado
+      const assignments = selectedWorkers.map((workerId) => ({
+        title: taskTitle,
+        description: taskDescription,
+        assigned_to: workerId,
+        created_by: userProfile.id,
+        delivery_id: deliveryId,
+        status: "pending",
+      }))
 
-      const demoWorkers = [
-        {
-          id: "44444444-4444-4444-4444-444444444444",
-          email: "operario1@logistica.com",
-          full_name: "Roberto Operario Grúa",
-          role: "operario_maquinaria",
-          permission_level: "normal",
-        },
-        {
-          id: "44444444-4444-4444-4444-444444444445",
-          email: "operario2@logistica.com",
-          full_name: "Miguel Operario Excavadora",
-          role: "operario_maquinaria",
-          permission_level: "normal",
-        },
-        {
-          id: "55555555-5555-5555-5555-555555555555",
-          email: "peon1@logistica.com",
-          full_name: "Pedro Peón Logística",
-          role: "peon_logistica",
-          permission_level: "normal",
-        },
-        {
-          id: "55555555-5555-5555-5555-555555555556",
-          email: "peon2@logistica.com",
-          full_name: "Sandra Peón Señalización",
-          role: "peon_logistica",
-          permission_level: "normal",
-        },
-      ]
-
-      const { error } = await supabase.from("user_profiles").upsert(demoWorkers, { onConflict: "id" })
+      const { error } = await supabase.from("work_assignments").insert(assignments)
 
       if (error) throw error
 
-      console.log("Demo workers created successfully")
-      fetchAvailableWorkers()
-    } catch (error) {
-      console.error("Error creating demo workers:", error)
-    }
-  }
+      toast({
+        title: "Trabajadores asignados",
+        description: `Se han asignado ${selectedWorkers.length} trabajadores a la entrega`,
+      })
 
-  const getDefaultSafetyRequirements = (role: string) => {
-    switch (role) {
-      case "operario_maquinaria":
-        return "Uso obligatorio de casco, arnés de seguridad, chaleco reflectivo. Verificar certificación de operador."
-      case "peon_logistica":
-        return "Uso obligatorio de casco, chaleco reflectivo, guantes de trabajo. Mantener comunicación por radio."
-      default:
-        return "Seguir protocolos de seguridad estándar."
-    }
-  }
-
-  const handleWorkerToggle = (index: number, checked: boolean) => {
-    setWorkers((prev) => prev.map((worker, i) => (i === index ? { ...worker, selected: checked } : worker)))
-  }
-
-  const handleInstructionsChange = (index: number, instructions: string) => {
-    setWorkers((prev) =>
-      prev.map((worker, i) => (i === index ? { ...worker, specialInstructions: instructions } : worker)),
-    )
-  }
-
-  const handleSafetyChange = (index: number, safety: string) => {
-    setWorkers((prev) => prev.map((worker, i) => (i === index ? { ...worker, safetyRequirements: safety } : worker)))
-  }
-
-  const handleAssignWorkers = async () => {
-    setAssigning(true)
-    try {
-      const selectedWorkers = workers.filter((w) => w.selected)
-
-      if (selectedWorkers.length === 0) {
-        onClose()
-        return
-      }
-
-      // Obtener información de la entrega
-      const { data: delivery, error: deliveryError } = await supabase
-        .from("deliveries")
-        .select("*")
-        .eq("id", deliveryId)
-        .single()
-
-      if (deliveryError) throw deliveryError
-
-      // Crear asignaciones para cada trabajador seleccionado
-      const assignments = selectedWorkers.map((workerData) => ({
-        title: `${workerData.assignmentType === "machinery" ? "Operación de Maquinaria" : "Apoyo Logístico"} - ${delivery.title}`,
-        description: `${workerData.assignmentType === "machinery" ? "Operación de maquinaria requerida" : "Apoyo en logística y señalización"} para: ${delivery.description}`,
-        assigned_to: workerData.worker.id,
-        delivery_id: deliveryId,
-        assignment_type: workerData.assignmentType,
-        priority: "normal",
-        status: "pending",
-        special_instructions: workerData.specialInstructions || null,
-        safety_requirements: workerData.safetyRequirements,
-        created_by: delivery.created_by,
-      }))
-
-      const { error: assignmentError } = await supabase.from("work_assignments").insert(assignments)
-
-      if (assignmentError) throw assignmentError
-
-      // Crear notificaciones para cada trabajador
-      const notifications = selectedWorkers.map((workerData) => ({
-        title: "Nueva Asignación de Trabajo",
-        message: `Te han asignado una nueva tarea: ${workerData.assignmentType === "machinery" ? "Operación de Maquinaria" : "Apoyo Logístico"} - ${delivery.title}`,
-        type: "work_assignment",
-        user_id: workerData.worker.id,
-        delivery_id: deliveryId,
-      }))
-
-      const { error: notificationError } = await supabase.from("notifications").insert(notifications)
-
-      if (notificationError) throw notificationError
-
+      // Limpiar selección
+      setSelectedWorkers([])
+      setTaskTitle("")
+      setTaskDescription("")
+      onOpenChange(false)
       onWorkersAssigned()
-      onClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error assigning workers:", error)
+      toast({
+        title: "Error",
+        description: `Error al asignar trabajadores: ${error.message}`,
+        variant: "destructive",
+      })
     } finally {
-      setAssigning(false)
+      setLoading(false)
     }
   }
 
-  const selectedCount = workers.filter((w) => w.selected).length
-
-  if (loading) {
-    return (
-      <div className="p-6 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-2 text-gray-600">Cargando trabajadores...</p>
-      </div>
-    )
-  }
-
-  if (workers.length === 0) {
-    return (
-      <div className="p-6 text-center">
-        <div className="p-4 bg-yellow-50 rounded-lg mb-4">
-          <AlertTriangle className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
-          <h3 className="text-lg font-medium text-yellow-800 mb-2">No hay trabajadores disponibles</h3>
-          <p className="text-sm text-yellow-700 mb-4">
-            No se encontraron operarios de maquinaria ni peones de logística en el sistema.
-          </p>
-          <Button onClick={createDemoWorkers} className="bg-yellow-600 hover:bg-yellow-700 text-white">
-            Crear Trabajadores de Demostración
-          </Button>
-        </div>
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>
-            Cerrar
-          </Button>
-          <Button onClick={fetchAvailableWorkers} variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Actualizar Lista
-          </Button>
-        </div>
-      </div>
-    )
+  const toggleWorker = (workerId: string) => {
+    setSelectedWorkers((prev) => (prev.includes(workerId) ? prev.filter((id) => id !== workerId) : [...prev, workerId]))
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Asignar Trabajadores</h3>
-          <p className="text-sm text-gray-600">
-            Selecciona los trabajadores que participarán en esta entrega ({selectedCount} seleccionados)
-          </p>
-        </div>
-        <Button onClick={fetchAvailableWorkers} variant="outline" size="sm" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Actualizar
-        </Button>
-      </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md sm:max-w-lg mx-auto">
+        <DialogHeader>
+          <DialogTitle>Asignar Personal a la Entrega</DialogTitle>
+          <DialogDescription>Selecciona los trabajadores que participarán en esta entrega</DialogDescription>
+        </DialogHeader>
 
-      <div className="space-y-4 max-h-96 overflow-y-auto">
-        {workers.map((workerData, index) => {
-          const roleColor = theme.roles[workerData.worker.role as keyof typeof theme.roles]
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="task-title">Título de la Tarea</Label>
+            <Input
+              id="task-title"
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              placeholder="ej. Carga de materiales"
+              required
+            />
+          </div>
 
-          return (
-            <Card key={workerData.worker.id} className={`border ${workerData.selected ? "ring-2 ring-blue-500" : ""}`}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id={`worker-${workerData.worker.id}`}
-                    checked={workerData.selected}
-                    onCheckedChange={(checked) => handleWorkerToggle(index, checked as boolean)}
-                  />
-                  <div className={`p-2 rounded-lg bg-gradient-to-r ${roleColor.gradient} text-white`}>
-                    {workerData.worker.role === "operario_maquinaria" ? (
-                      <Settings className="h-4 w-4" />
-                    ) : (
-                      <Users className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <Label htmlFor={`worker-${workerData.worker.id}`} className="text-base font-medium cursor-pointer">
-                      {workerData.worker.full_name}
-                    </Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs">
-                        {getRoleLabel(workerData.worker.role)}
-                      </Badge>
-                      <Badge className={`text-xs ${roleColor.light}`} style={{ color: roleColor.primary }}>
-                        {workerData.assignmentType === "machinery" ? "Maquinaria" : "Logística"}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {workerData.worker.email}
-                      </Badge>
+          <div className="space-y-2">
+            <Label htmlFor="task-description">Descripción</Label>
+            <Input
+              id="task-description"
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.target.value)}
+              placeholder="Describe la tarea a realizar"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Selecciona Trabajadores</Label>
+            {loading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <span className="ml-2">Cargando trabajadores...</span>
+              </div>
+            ) : workers.length === 0 ? (
+              <div className="text-center py-4 border rounded-md">
+                <Users className="h-8 w-8 mx-auto text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">No hay trabajadores disponibles</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
+                {workers.map((worker) => (
+                  <div key={worker.id} className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded">
+                    <Checkbox
+                      id={`worker-${worker.id}`}
+                      checked={selectedWorkers.includes(worker.id)}
+                      onCheckedChange={() => toggleWorker(worker.id)}
+                    />
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div
+                        className={`p-1 rounded ${
+                          worker.role === "operario_maquinaria" ? "bg-purple-100" : "bg-blue-100"
+                        }`}
+                      >
+                        {worker.role === "operario_maquinaria" ? (
+                          <Settings className="h-4 w-4 text-purple-600" />
+                        ) : (
+                          <Users className="h-4 w-4 text-blue-600" />
+                        )}
+                      </div>
+                      <Label
+                        htmlFor={`worker-${worker.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 truncate"
+                      >
+                        {worker.name}
+                        <span className="text-xs text-gray-500 block">
+                          {worker.role === "operario_maquinaria" ? "Operario" : "Peón Logística"}
+                        </span>
+                      </Label>
                     </div>
                   </div>
-                </div>
-              </CardHeader>
+                ))}
+              </div>
+            )}
+          </div>
 
-              {workerData.selected && (
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Instrucciones Especiales
-                    </Label>
-                    <Textarea
-                      placeholder="Instrucciones específicas para este trabajador..."
-                      value={workerData.specialInstructions}
-                      onChange={(e) => handleInstructionsChange(index, e.target.value)}
-                      rows={2}
-                      className="text-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-1">
-                      <Shield className="h-3 w-3" />
-                      Requisitos de Seguridad
-                    </Label>
-                    <Textarea
-                      value={workerData.safetyRequirements}
-                      onChange={(e) => handleSafetyChange(index, e.target.value)}
-                      rows={2}
-                      className="text-sm"
-                    />
-                  </div>
-                </CardContent>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAssignWorkers} disabled={loading || selectedWorkers.length === 0}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Asignando...
+                </>
+              ) : (
+                "Asignar Trabajadores"
               )}
-            </Card>
-          )
-        })}
-      </div>
-
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button variant="outline" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button
-          onClick={handleAssignWorkers}
-          disabled={assigning || selectedCount === 0}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
-        >
-          {assigning ? "Asignando..." : `Asignar ${selectedCount} Trabajador${selectedCount !== 1 ? "es" : ""}`}
-        </Button>
-      </div>
-    </div>
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

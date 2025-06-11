@@ -1,157 +1,173 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Get environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Validate environment variables
-if (!supabaseUrl) {
-  console.error("Missing environment variable: NEXT_PUBLIC_SUPABASE_URL")
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Types
+export type Database = {
+  public: {
+    Tables: {
+      user_profiles: {
+        Row: {
+          id: string
+          email: string
+          full_name: string
+          role: "oficial_almacen" | "transportista" | "encargado_obra" | "operario_maquinaria" | "peon_logistica"
+          permission_level: "admin" | "normal"
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          full_name: string
+          role: "oficial_almacen" | "transportista" | "encargado_obra" | "operario_maquinaria" | "peon_logistica"
+          permission_level?: "admin" | "normal"
+        }
+        Update: {
+          full_name?: string
+          role?: "oficial_almacen" | "transportista" | "encargado_obra" | "operario_maquinaria" | "peon_logistica"
+          permission_level?: "admin" | "normal"
+        }
+      }
+      deliveries: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          delivery_address: string
+          status: "pending" | "assigned" | "in_transit" | "delivered" | "completed"
+          created_by: string
+          assigned_to: string | null
+          work_site_id: string | null
+          scheduled_date: string | null
+          completed_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          title: string
+          description?: string
+          delivery_address: string
+          created_by: string
+          work_site_id?: string
+          scheduled_date?: string
+        }
+        Update: {
+          title?: string
+          description?: string
+          delivery_address?: string
+          status?: "pending" | "assigned" | "in_transit" | "delivered" | "completed"
+          assigned_to?: string
+          scheduled_date?: string
+          completed_date?: string
+        }
+      }
+      notifications: {
+        Row: {
+          id: string
+          title: string
+          message: string
+          type: string
+          user_id: string
+          delivery_id: string | null
+          read: boolean
+          created_at: string
+        }
+      }
+      work_sites: {
+        Row: {
+          id: string
+          name: string
+          address: string
+          description: string | null
+          site_manager_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          name: string
+          address: string
+          description?: string
+          site_manager_id?: string
+        }
+        Update: {
+          name?: string
+          address?: string
+          description?: string
+          site_manager_id?: string
+        }
+      }
+      warehouse_requests: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          quantity: number
+          status: string
+          requested_by: string
+          work_site_id: string | null
+          created_at: string
+          updated_at: string
+          image_url: string | null
+        }
+        Insert: {
+          title: string
+          description?: string
+          quantity: number
+          requested_by: string
+          work_site_id?: string
+          image_url?: string
+        }
+        Update: {
+          title?: string
+          description?: string
+          quantity?: number
+          status?: string
+          image_url?: string
+        }
+      }
+      work_assignments: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          status: "pending" | "in_progress" | "completed" | "cancelled"
+          created_by: string
+          assigned_to: string
+          delivery_id: string | null
+          work_site_id: string | null
+          scheduled_date: string | null
+          completed_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          title: string
+          description?: string
+          status?: "pending" | "in_progress" | "completed" | "cancelled"
+          created_by: string
+          assigned_to: string
+          delivery_id?: string
+          work_site_id?: string
+          scheduled_date?: string
+        }
+        Update: {
+          title?: string
+          description?: string
+          status?: "pending" | "in_progress" | "completed" | "cancelled"
+          completed_date?: string
+        }
+      }
+    }
+  }
 }
 
-if (!supabaseAnonKey) {
-  console.error("Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY")
-}
-
-// Create Supabase client
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "", {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-})
-
-// Types for database tables
-export type UserRole = "oficial_almacen" | "transportista" | "encargado_obra" | "operario_maquinaria" | "peon_logistica"
-
-export type UserProfile = {
-  id: string
-  email: string
-  full_name: string
-  role: UserRole
-  permission_level: "admin" | "normal"
-  phone?: string
-  avatar_url?: string
-  created_at: string
-  updated_at: string
-}
-
-export type Delivery = {
-  id: string
-  title: string
-  description?: string
-  delivery_address: string
-  status: "pending" | "assigned" | "in_transit" | "delivered" | "completed"
-  priority?: string
-  created_by: string
-  assigned_to?: string
-  work_site_id?: string
-  scheduled_date?: string
-  started_at?: string
-  completed_date?: string
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
-export type Notification = {
-  id: string
-  title: string
-  message: string
-  type: string
-  user_id: string
-  delivery_id?: string
-  work_site_id?: string
-  read: boolean
-  created_at: string
-}
-
-export type WorkSite = {
-  id: string
-  name: string
-  address: string
-  description?: string
-  site_manager_id?: string
-  status?: string
-  created_at: string
-  updated_at: string
-}
-
-export type WarehouseRequest = {
-  id: string
-  title: string
-  description?: string
-  quantity: number
-  unit?: string
-  status: "pending" | "approved" | "rejected" | "completed"
-  priority?: string
-  requested_by: string
-  approved_by?: string
-  work_site_id?: string
-  image_url?: string
-  approved_at?: string
-  completed_at?: string
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
-export type WorkAssignment = {
-  id: string
-  title: string
-  description?: string
-  assigned_to: string
-  delivery_id?: string
-  work_site_id?: string
-  assignment_type: "machinery" | "logistics" | "loading" | "signaling"
-  priority: "low" | "normal" | "high" | "urgent"
-  status: "pending" | "in_progress" | "completed" | "cancelled"
-  scheduled_start?: string
-  scheduled_end?: string
-  actual_start?: string
-  actual_end?: string
-  equipment_needed?: string
-  special_instructions?: string
-  safety_requirements?: string
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-
-export type WorkReport = {
-  id: string
-  assignment_id: string
-  reported_by: string
-  report_type: "progress" | "completion" | "issue" | "delay"
-  description: string
-  photos?: string[]
-  location_notes?: string
-  equipment_status?: string
-  next_steps?: string
-  created_at: string
-}
-
-export type Equipment = {
-  id: string
-  name: string
-  description?: string
-  serial_number?: string
-  status: "available" | "in_use" | "maintenance"
-  work_site_id?: string
-  assigned_to?: string
-  created_at: string
-  updated_at: string
-}
-
-export type Worker = {
-  id: string
-  full_name: string
-  position: string
-  phone?: string
-  work_site_id?: string
-  supervisor_id?: string
-  status?: string
-  created_at: string
-  updated_at: string
-}
+export type UserProfile = Database["public"]["Tables"]["user_profiles"]["Row"]
+export type Delivery = Database["public"]["Tables"]["deliveries"]["Row"]
+export type Notification = Database["public"]["Tables"]["notifications"]["Row"]
+export type WorkSite = Database["public"]["Tables"]["work_sites"]["Row"]
+export type WarehouseRequest = Database["public"]["Tables"]["warehouse_requests"]["Row"]
+export type WorkAssignment = Database["public"]["Tables"]["work_assignments"]["Row"]

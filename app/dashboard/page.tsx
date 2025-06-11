@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [warehouseRequests, setWarehouseRequests] = useState<WarehouseRequest[]>([])
   const [workAssignments, setWorkAssignments] = useState<WorkAssignment[]>([])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState("deliveries")
   const [stats, setStats] = useState({
     totalDeliveries: 0,
     pendingDeliveries: 0,
@@ -209,6 +210,71 @@ export default function Dashboard() {
         setDeliveries([])
       }
 
+      // Fetch notifications
+      try {
+        const { data: notificationsData, error: notificationsError } = await supabase
+          .from("notifications")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(20)
+
+        if (notificationsError) {
+          console.error("Error fetching notifications:", notificationsError)
+        } else {
+          setNotifications(notificationsData || [])
+        }
+      } catch (err) {
+        console.error("Error in notifications fetch:", err)
+        setNotifications([])
+      }
+
+      // Fetch warehouse requests
+      try {
+        let requestsQuery = supabase.from("warehouse_requests").select("*")
+
+        if (userProfile.role === "encargado_obra") {
+          requestsQuery = requestsQuery.eq("requested_by", userId)
+        }
+
+        const { data: requestsData, error: requestsError } = await requestsQuery.order("created_at", {
+          ascending: false,
+        })
+
+        if (requestsError) {
+          console.error("Error fetching warehouse requests:", requestsError)
+        } else {
+          setWarehouseRequests(requestsData || [])
+        }
+      } catch (err) {
+        console.error("Error in warehouse requests fetch:", err)
+        setWarehouseRequests([])
+      }
+
+      // Fetch work assignments
+      try {
+        let assignmentsQuery = supabase.from("work_assignments").select("*")
+
+        if (userProfile.role === "operario_maquinaria" || userProfile.role === "peon_logistica") {
+          assignmentsQuery = assignmentsQuery.eq("assigned_to", userId)
+        } else if (userProfile.role === "encargado_obra") {
+          assignmentsQuery = assignmentsQuery.eq("created_by", userId)
+        }
+
+        const { data: assignmentsData, error: assignmentsError } = await assignmentsQuery.order("created_at", {
+          ascending: false,
+        })
+
+        if (assignmentsError) {
+          console.error("Error fetching work assignments:", assignmentsError)
+        } else {
+          setWorkAssignments(assignmentsData || [])
+        }
+      } catch (err) {
+        console.error("Error in work assignments fetch:", err)
+        setWorkAssignments([])
+      }
+
       // Calculate stats
       const totalDeliveries = deliveries?.length || 0
       const pendingDeliveries = deliveries?.filter((d) => d.status === "pending" || d.status === "assigned").length || 0
@@ -320,9 +386,18 @@ export default function Dashboard() {
   // Obtener el color del rol
   const roleColor = getRoleColor(profile.role)
 
+  // Función para manejar el cambio de pestaña en móvil
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    // Scroll al inicio en móvil cuando se cambia de pestaña
+    if (window.innerWidth < 768) {
+      window.scrollTo(0, 0)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header Responsive con estilo inline */}
+      {/* Header Responsive */}
       <div style={getHeaderStyle(profile.role)} className="text-white shadow-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-3 sm:py-4">
@@ -444,7 +519,12 @@ export default function Dashboard() {
         </div>
 
         {/* Main Tabs - Responsive */}
-        <Tabs defaultValue={showAssignments ? "assignments" : "deliveries"} className="space-y-4 sm:space-y-6">
+        <Tabs
+          defaultValue={showAssignments ? "assignments" : "deliveries"}
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="space-y-4 sm:space-y-6"
+        >
           <div className="overflow-x-auto">
             <TabsList className="bg-white shadow-sm border w-full sm:w-auto">
               {showDeliveries && (
