@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { Settings, Users, Loader2, AlertCircle } from "lucide-react"
+import { Settings, Users, Loader2, AlertCircle, RefreshCw } from "lucide-react"
 
 interface WorkerSelectorProps {
   open: boolean
@@ -27,11 +28,12 @@ export function WorkerSelector({
 }: WorkerSelectorProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [workers, setWorkers] = useState<{ id: string; name: string; role: string }[]>([])
+  const [workers, setWorkers] = useState<{ id: string; name: string; role: string; email: string }[]>([])
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
   const [taskTitle, setTaskTitle] = useState("")
   const [taskDescription, setTaskDescription] = useState("")
   const [fetchingWorkers, setFetchingWorkers] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open && deliveryId) {
@@ -39,78 +41,117 @@ export function WorkerSelector({
       setTaskTitle(`Trabajo para entrega ${deliveryId.substring(0, 8)}`)
       setTaskDescription("Apoyo en la entrega de materiales")
       setSelectedWorkers([]) // Limpiar selección previa
+      setError(null)
     }
   }, [open, deliveryId])
 
   const fetchWorkers = async () => {
     setFetchingWorkers(true)
+    setError(null)
+
     try {
       console.log("Fetching workers for assignment...")
 
-      // Intentar obtener trabajadores con roles específicos
+      // Método 1: Intentar usar la función principal corregida
+      try {
+        console.log("Trying main function...")
+        const { data: functionData, error: functionError } = await supabase.rpc("get_available_workers_for_assignment")
+
+        if (functionError) {
+          console.log("Main function error:", functionError)
+          throw functionError
+        }
+
+        if (functionData && functionData.length > 0) {
+          console.log("Workers from main function:", functionData)
+          setWorkers(
+            functionData.map((worker: any) => ({
+              id: worker.id,
+              name: worker.full_name,
+              role: worker.role,
+              email: worker.email,
+            })),
+          )
+          return
+        }
+      } catch (funcError) {
+        console.log("Main function failed, trying simple function...")
+      }
+
+      // Método 2: Intentar usar la función simple
+      try {
+        console.log("Trying simple function...")
+        const { data: simpleData, error: simpleError } = await supabase.rpc("get_workers_simple")
+
+        if (simpleError) {
+          console.log("Simple function error:", simpleError)
+          throw simpleError
+        }
+
+        if (simpleData && simpleData.length > 0) {
+          console.log("Workers from simple function:", simpleData)
+
+          // Filtrar según el rol del usuario
+          let filteredWorkers = simpleData
+          if (userProfile.role === "encargado_obra") {
+            // Encargados de obra solo ven operarios y peones
+            filteredWorkers = simpleData.filter((w) => w.role === "operario_maquinaria" || w.role === "peon_logistica")
+          }
+
+          setWorkers(
+            filteredWorkers.map((worker: any) => ({
+              id: worker.id,
+              name: worker.full_name,
+              role: worker.role,
+              email: worker.email,
+            })),
+          )
+          return
+        }
+      } catch (simpleError) {
+        console.log("Simple function also failed, trying direct query...")
+      }
+
+      // Método 3: Consulta directa como último recurso
+      console.log("Trying direct query...")
+
+      const roles = ["operario_maquinaria", "peon_logistica"]
+      if (userProfile.role === "oficial_almacen") {
+        roles.push("transportista")
+      }
+
       const { data, error } = await supabase
         .from("user_profiles")
-        .select("id, full_name, role")
-        .in("role", ["operario_maquinaria", "peon_logistica"])
+        .select("id, full_name, role, email")
+        .in("role", roles)
         .order("full_name")
 
-      console.log("Workers query result:", { data, error })
+      console.log("Direct query result:", { data, error })
 
       if (error) {
-        console.error("Error fetching workers:", error)
+        console.error("Direct query error:", error)
         throw error
       }
 
       if (!data || data.length === 0) {
-        console.log("No workers found, trying alternative query...")
-
-        // Intentar consulta alternativa sin filtro de rol
-        const { data: allUsers, error: allUsersError } = await supabase
-          .from("user_profiles")
-          .select("id, full_name, role")
-          .order("full_name")
-
-        console.log("All users query result:", { data: allUsers, error: allUsersError })
-
-        if (allUsersError) throw allUsersError
-
-        // Filtrar manualmente los roles que necesitamos
-        const filteredWorkers = (allUsers || []).filter(
-          (user) => user.role === "operario_maquinaria" || user.role === "peon_logistica",
+        setError(
+          "No se encontraron trabajadores en el sistema. Verifica que existan usuarios con los roles apropiados.",
         )
-
-        setWorkers(
-          filteredWorkers.map((worker) => ({
-            id: worker.id,
-            name: worker.full_name,
-            role: worker.role,
-          })),
-        )
-
-        if (filteredWorkers.length === 0) {
-          toast({
-            title: "Sin trabajadores",
-            description:
-              "No se encontraron operarios o peones de logística en el sistema. Verifica que existan usuarios con estos roles.",
-            variant: "destructive",
-          })
-        }
+        setWorkers([])
       } else {
+        console.log("Workers found via direct query:", data.length)
         setWorkers(
           data.map((worker) => ({
             id: worker.id,
             name: worker.full_name,
             role: worker.role,
+            email: worker.email,
           })),
         )
       }
     } catch (error: any) {
       console.error("Error fetching workers:", error)
-      toast({
-        title: "Error",
-        description: `Error al cargar trabajadores: ${error.message}`,
-        variant: "destructive",
-      })
+      setError(`Error al cargar trabajadores: ${error.message}`)
       setWorkers([])
     } finally {
       setFetchingWorkers(false)
@@ -154,6 +195,8 @@ export function WorkerSelector({
         created_by: userProfile.id,
         delivery_id: deliveryId,
         status: "pending",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       }))
 
       console.log("Assignments to insert:", assignments)
@@ -194,6 +237,50 @@ export function WorkerSelector({
     setSelectedWorkers((prev) => (prev.includes(workerId) ? prev.filter((id) => id !== workerId) : [...prev, workerId]))
   }
 
+  const handleRetry = () => {
+    setError(null)
+    fetchWorkers()
+  }
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "operario_maquinaria":
+        return "Operario de Maquinaria"
+      case "peon_logistica":
+        return "Peón de Logística"
+      case "transportista":
+        return "Transportista"
+      default:
+        return role
+    }
+  }
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case "operario_maquinaria":
+        return <Settings className="h-4 w-4 text-purple-600" />
+      case "peon_logistica":
+        return <Users className="h-4 w-4 text-blue-600" />
+      case "transportista":
+        return <Users className="h-4 w-4 text-green-600" />
+      default:
+        return <Users className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "operario_maquinaria":
+        return "bg-purple-100"
+      case "peon_logistica":
+        return "bg-blue-100"
+      case "transportista":
+        return "bg-green-100"
+      default:
+        return "bg-gray-100"
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md sm:max-w-lg mx-auto">
@@ -216,16 +303,26 @@ export function WorkerSelector({
 
           <div className="space-y-2">
             <Label htmlFor="task-description">Descripción</Label>
-            <Input
+            <Textarea
               id="task-description"
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.target.value)}
               placeholder="Describe la tarea a realizar"
+              rows={3}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Selecciona Trabajadores</Label>
+            <div className="flex items-center justify-between">
+              <Label>Selecciona Trabajadores</Label>
+              {!fetchingWorkers && (
+                <Button variant="ghost" size="sm" onClick={handleRetry}>
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Actualizar
+                </Button>
+              )}
+            </div>
+
             {fetchingWorkers ? (
               <div className="flex items-center justify-center py-8 border rounded-md">
                 <div className="text-center">
@@ -233,14 +330,24 @@ export function WorkerSelector({
                   <p className="mt-2 text-sm text-gray-600">Cargando trabajadores...</p>
                 </div>
               </div>
+            ) : error ? (
+              <div className="text-center py-8 border rounded-md border-red-200 bg-red-50">
+                <AlertCircle className="h-8 w-8 mx-auto text-red-400 mb-2" />
+                <p className="text-sm text-red-600 mb-2 px-4">{error}</p>
+                <Button variant="outline" size="sm" onClick={handleRetry} className="mt-2">
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Reintentar
+                </Button>
+              </div>
             ) : workers.length === 0 ? (
               <div className="text-center py-8 border rounded-md">
                 <AlertCircle className="h-8 w-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-500 mb-2">No hay trabajadores disponibles</p>
-                <p className="text-xs text-gray-400">
-                  Verifica que existan usuarios con roles "operario_maquinaria" o "peon_logistica"
+                <p className="text-xs text-gray-400 px-4">
+                  Verifica que existan usuarios con los roles apropiados en el sistema
                 </p>
-                <Button variant="outline" size="sm" onClick={fetchWorkers} className="mt-2">
+                <Button variant="outline" size="sm" onClick={handleRetry} className="mt-2">
+                  <RefreshCw className="h-4 w-4 mr-1" />
                   Reintentar
                 </Button>
               </div>
@@ -254,25 +361,14 @@ export function WorkerSelector({
                       onCheckedChange={() => toggleWorker(worker.id)}
                     />
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div
-                        className={`p-1 rounded ${
-                          worker.role === "operario_maquinaria" ? "bg-purple-100" : "bg-blue-100"
-                        }`}
-                      >
-                        {worker.role === "operario_maquinaria" ? (
-                          <Settings className="h-4 w-4 text-purple-600" />
-                        ) : (
-                          <Users className="h-4 w-4 text-blue-600" />
-                        )}
-                      </div>
+                      <div className={`p-1 rounded ${getRoleColor(worker.role)}`}>{getRoleIcon(worker.role)}</div>
                       <Label
                         htmlFor={`worker-${worker.id}`}
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 truncate cursor-pointer"
                       >
                         {worker.name}
-                        <span className="text-xs text-gray-500 block">
-                          {worker.role === "operario_maquinaria" ? "Operario de Maquinaria" : "Peón de Logística"}
-                        </span>
+                        <span className="text-xs text-gray-500 block">{getRoleLabel(worker.role)}</span>
+                        {worker.email && <span className="text-xs text-gray-400 block">{worker.email}</span>}
                       </Label>
                     </div>
                   </div>

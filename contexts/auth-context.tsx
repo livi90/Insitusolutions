@@ -53,38 +53,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Fetching profile for user:", userId)
 
-      // Consulta directa sin políticas complejas
-      const { data, error } = await supabase.from("user_profiles").select("*").eq("id", userId).maybeSingle() // Usar maybeSingle en lugar de single para evitar errores si no existe
+      // Con las políticas V22 restauradas, solo podemos ver nuestro propio perfil
+      const { data, error } = await supabase.from("user_profiles").select("*").eq("id", userId).single()
 
       if (error) {
         console.error("Error fetching profile:", error)
-        throw error
-      }
 
-      if (!data) {
-        console.log("Profile not found, creating fallback profile")
-        // Crear perfil de fallback si no existe
-        const fallbackProfile: UserProfile = {
-          id: userId,
-          email: user?.email || "",
-          full_name: user?.user_metadata?.full_name || "Usuario",
-          role: (user?.user_metadata?.role as any) || "transportista",
-          permission_level: (user?.user_metadata?.permission_level as any) || "normal",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-
-        // Intentar crear el perfil en la base de datos
-        try {
-          const { error: insertError } = await supabase.from("user_profiles").insert(fallbackProfile)
-          if (insertError) {
-            console.error("Error creating profile:", insertError)
+        // Si el perfil no existe, crear uno básico
+        if (error.code === "PGRST116") {
+          console.log("Profile not found, creating basic profile")
+          const basicProfile: UserProfile = {
+            id: userId,
+            email: user?.email || "",
+            full_name: user?.user_metadata?.full_name || "Usuario",
+            role: (user?.user_metadata?.role as any) || "transportista",
+            permission_level: (user?.user_metadata?.permission_level as any) || "normal",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           }
-        } catch (insertErr) {
-          console.error("Failed to insert profile:", insertErr)
+          setProfile(basicProfile)
+        } else {
+          throw error
         }
-
-        setProfile(fallbackProfile)
       } else {
         console.log("Profile loaded successfully:", data)
         setProfile(data)
@@ -92,12 +82,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error("Error in fetchProfile:", error)
 
-      // Crear perfil de emergencia sin intentar guardar en BD
+      // Crear perfil de emergencia
       const emergencyProfile: UserProfile = {
         id: userId,
         email: user?.email || "",
         full_name: user?.user_metadata?.full_name || "Usuario",
-        role: "transportista", // Rol por defecto
+        role: "transportista",
         permission_level: "normal",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

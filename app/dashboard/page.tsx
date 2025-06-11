@@ -6,33 +6,55 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Bell, Package, Truck, LogOut, Loader2, Building, AlertCircle } from "lucide-react"
-import { supabase, type UserProfile, type Delivery, type Notification, type WarehouseRequest } from "@/lib/supabase"
+import { Bell, Package, Truck, LogOut, Loader2, Building, AlertCircle, Users, Settings } from "lucide-react"
+import {
+  supabase,
+  type UserProfile,
+  type Delivery,
+  type Notification,
+  type WarehouseRequest,
+  type WorkAssignment,
+} from "@/lib/supabase"
 import { DeliveryManager } from "@/components/delivery-manager"
 import { NotificationCenter } from "@/components/notification-center"
 import { WorkSiteManager } from "@/components/worksite-manager"
 import { WarehouseRequestManager } from "@/components/warehouse-request-manager"
+import { WorkAssignmentManager } from "@/components/work-assignment-manager"
 import { getRoleLabel } from "@/lib/theme"
 import { useToast } from "@/hooks/use-toast"
 
 export default function Dashboard() {
   const router = useRouter()
   const { toast } = useToast()
+
+  // Estados principales
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [signingOut, setSigningOut] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Estados de datos
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [warehouseRequests, setWarehouseRequests] = useState<WarehouseRequest[]>([])
+  const [workAssignments, setWorkAssignments] = useState<WorkAssignment[]>([])
+
+  // Estados de UI
   const [activeTab, setActiveTab] = useState("deliveries")
   const [stats, setStats] = useState({
     totalDeliveries: 0,
     pendingDeliveries: 0,
     completedDeliveries: 0,
     unreadNotifications: 0,
+    pendingAssignments: 0,
   })
-  const [error, setError] = useState<string | null>(null)
+
+  // Estados de visibilidad de pestañas
+  const [showDeliveries, setShowDeliveries] = useState(false)
+  const [showWorkSites, setShowWorkSites] = useState(false)
+  const [showRequests, setShowRequests] = useState(false)
+  const [showAssignments, setShowAssignments] = useState(false)
 
   // Función para obtener el estilo del header según el rol
   const getHeaderStyle = (role: string) => {
@@ -64,6 +86,7 @@ export default function Dashboard() {
     }
   }
 
+  // Efecto principal para verificar autenticación
   useEffect(() => {
     const checkUser = async () => {
       try {
@@ -120,44 +143,51 @@ export default function Dashboard() {
     }
   }, [router])
 
+  // Efecto para determinar qué pestañas mostrar según el rol
+  useEffect(() => {
+    if (profile) {
+      const newShowDeliveries = ["oficial_almacen", "transportista", "encargado_obra"].includes(profile.role)
+      const newShowWorkSites = profile.role === "encargado_obra"
+      const newShowRequests = profile.role === "encargado_obra"
+      const newShowAssignments = profile.role === "operario_maquinaria" || profile.role === "peon_logistica"
+
+      setShowDeliveries(newShowDeliveries)
+      setShowWorkSites(newShowWorkSites)
+      setShowRequests(newShowRequests)
+      setShowAssignments(newShowAssignments)
+
+      // Establecer pestaña activa por defecto
+      if (newShowAssignments) {
+        setActiveTab("assignments")
+      } else if (newShowDeliveries) {
+        setActiveTab("deliveries")
+      } else {
+        setActiveTab("notifications")
+      }
+    }
+  }, [profile])
+
   const fetchUserProfile = async (userId: string) => {
     try {
       console.log("Fetching profile for user:", userId)
 
-      // Consulta simple y directa
+      // Con las políticas V22, solo podemos ver nuestro propio perfil
       const { data: profileData, error: profileError } = await supabase
         .from("user_profiles")
         .select("*")
         .eq("id", userId)
-        .maybeSingle()
+        .single()
 
       if (profileError) {
         console.error("Profile error:", profileError)
         throw profileError
       }
 
-      if (!profileData) {
-        console.log("Profile not found, creating fallback profile")
-        const fallbackProfile: UserProfile = {
-          id: userId,
-          email: user?.email || "",
-          full_name: user?.user_metadata?.full_name || "Usuario",
-          role: (user?.user_metadata?.role as any) || "transportista",
-          permission_level: (user?.user_metadata?.permission_level as any) || "normal",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-        setProfile(fallbackProfile)
-      } else {
-        console.log("Profile found:", profileData)
-        setProfile(profileData)
-      }
+      console.log("Profile found:", profileData)
+      setProfile(profileData)
 
-      // Cargar datos solo si tenemos un perfil
-      const currentProfile = profileData || profile
-      if (currentProfile) {
-        await fetchData(userId, currentProfile)
-      }
+      // Cargar datos después de obtener el perfil
+      await fetchData(userId, profileData)
     } catch (err: any) {
       console.error("Error fetching user profile:", err)
       setError(err.message)
@@ -168,7 +198,7 @@ export default function Dashboard() {
     console.log("Fetching data for user:", userId, "with role:", userProfile.role)
 
     try {
-      // Fetch deliveries con consulta simple
+      // Fetch deliveries - Con políticas V22, solo vemos entregas relevantes
       try {
         console.log("Fetching deliveries...")
         const { data: deliveriesData, error: deliveriesError } = await supabase
@@ -179,6 +209,7 @@ export default function Dashboard() {
 
         if (deliveriesError) {
           console.error("Error fetching deliveries:", deliveriesError)
+          setDeliveries([])
         } else {
           console.log("Deliveries loaded:", deliveriesData?.length || 0)
           setDeliveries(deliveriesData || [])
@@ -188,7 +219,7 @@ export default function Dashboard() {
         setDeliveries([])
       }
 
-      // Fetch notifications con consulta simple
+      // Fetch notifications - Con políticas V22, solo vemos nuestras notificaciones
       try {
         console.log("Fetching notifications...")
         const { data: notificationsData, error: notificationsError } = await supabase
@@ -200,6 +231,7 @@ export default function Dashboard() {
 
         if (notificationsError) {
           console.error("Error fetching notifications:", notificationsError)
+          setNotifications([])
         } else {
           console.log("Notifications loaded:", notificationsData?.length || 0)
           setNotifications(notificationsData || [])
@@ -209,7 +241,30 @@ export default function Dashboard() {
         setNotifications([])
       }
 
-      // Fetch warehouse requests con consulta simple
+      // Fetch work assignments para trabajadores
+      try {
+        console.log("Fetching work assignments...")
+        if (userProfile.role === "operario_maquinaria" || userProfile.role === "peon_logistica") {
+          const { data: assignmentsData, error: assignmentsError } = await supabase
+            .from("work_assignments")
+            .select("*")
+            .eq("assigned_to", userId)
+            .order("created_at", { ascending: false })
+
+          if (assignmentsError) {
+            console.error("Error fetching work assignments:", assignmentsError)
+            setWorkAssignments([])
+          } else {
+            console.log("Work assignments loaded:", assignmentsData?.length || 0)
+            setWorkAssignments(assignmentsData || [])
+          }
+        }
+      } catch (err) {
+        console.error("Error in work assignments fetch:", err)
+        setWorkAssignments([])
+      }
+
+      // Fetch warehouse requests - Con políticas V22, solo encargados y oficiales
       try {
         console.log("Fetching warehouse requests...")
         if (userProfile.role === "encargado_obra" || userProfile.role === "oficial_almacen") {
@@ -221,6 +276,7 @@ export default function Dashboard() {
 
           if (requestsError) {
             console.error("Error fetching warehouse requests:", requestsError)
+            setWarehouseRequests([])
           } else {
             console.log("Warehouse requests loaded:", requestsData?.length || 0)
             setWarehouseRequests(requestsData || [])
@@ -231,25 +287,30 @@ export default function Dashboard() {
         setWarehouseRequests([])
       }
 
-      // Calculate stats
-      const totalDeliveries = deliveries?.length || 0
-      const pendingDeliveries = deliveries?.filter((d) => d.status === "pending" || d.status === "assigned").length || 0
-      const completedDeliveries = deliveries?.filter((d) => d.status === "completed").length || 0
-      const unreadNotifications = notifications?.filter((n) => !n.read).length || 0
-
-      setStats({
-        totalDeliveries,
-        pendingDeliveries,
-        completedDeliveries,
-        unreadNotifications,
-      })
-
       console.log("Data fetch completed successfully")
     } catch (err: any) {
       console.error("Error fetching data:", err)
       setError(`Error al cargar datos: ${err.message}`)
     }
   }
+
+  // Efecto para calcular estadísticas cuando cambian los datos
+  useEffect(() => {
+    const totalDeliveries = deliveries?.length || 0
+    const pendingDeliveries = deliveries?.filter((d) => d.status === "pending" || d.status === "assigned").length || 0
+    const completedDeliveries = deliveries?.filter((d) => d.status === "completed").length || 0
+    const unreadNotifications = notifications?.filter((n) => !n.read).length || 0
+    const pendingAssignments =
+      workAssignments?.filter((a) => a.status === "pending" || a.status === "in_progress").length || 0
+
+    setStats({
+      totalDeliveries,
+      pendingDeliveries,
+      completedDeliveries,
+      unreadNotifications,
+      pendingAssignments,
+    })
+  }, [deliveries, notifications, workAssignments])
 
   const handleSignOut = async () => {
     if (signingOut) return
@@ -265,6 +326,7 @@ export default function Dashboard() {
       setDeliveries([])
       setNotifications([])
       setWarehouseRequests([])
+      setWorkAssignments([])
 
       // Cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut()
@@ -304,6 +366,15 @@ export default function Dashboard() {
   const handleRefresh = () => {
     if (user && profile) {
       fetchData(user.id, profile)
+    }
+  }
+
+  // Función para manejar el cambio de pestaña en móvil
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    // Scroll al inicio en móvil cuando se cambia de pestaña
+    if (window.innerWidth < 768) {
+      window.scrollTo(0, 0)
     }
   }
 
@@ -355,20 +426,6 @@ export default function Dashboard() {
         </div>
       </div>
     )
-  }
-
-  // Determinar qué pestañas mostrar según el rol
-  const showDeliveries = ["oficial_almacen", "transportista", "encargado_obra"].includes(profile.role)
-  const showWorkSites = profile.role === "encargado_obra"
-  const showRequests = profile.role === "encargado_obra"
-
-  // Función para manejar el cambio de pestaña en móvil
-  const handleTabChange = (value: string) => {
-    setActiveTab(value)
-    // Scroll al inicio en móvil cuando se cambia de pestaña
-    if (window.innerWidth < 768) {
-      window.scrollTo(0, 0)
-    }
   }
 
   return (
@@ -466,6 +523,23 @@ export default function Dashboard() {
             </>
           )}
 
+          {showAssignments && (
+            <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium">Mis Tareas</CardTitle>
+                {profile.role === "operario_maquinaria" ? (
+                  <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
+                ) : (
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-600" />
+                )}
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold">{stats.pendingAssignments}</div>
+                <p className="text-xs text-gray-500 mt-1 hidden sm:block">Tareas pendientes</p>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
               <CardTitle className="text-xs sm:text-sm font-medium">Notificaciones</CardTitle>
@@ -480,13 +554,21 @@ export default function Dashboard() {
 
         {/* Main Tabs - Responsive */}
         <Tabs
-          defaultValue="deliveries"
+          defaultValue={showAssignments ? "assignments" : "deliveries"}
           value={activeTab}
           onValueChange={handleTabChange}
           className="space-y-4 sm:space-y-6"
         >
           <div className="overflow-x-auto">
             <TabsList className="bg-white shadow-sm border w-full sm:w-auto">
+              {showAssignments && (
+                <TabsTrigger
+                  value="assignments"
+                  className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-4"
+                >
+                  Mis Tareas
+                </TabsTrigger>
+              )}
               {showDeliveries && (
                 <TabsTrigger
                   value="deliveries"
@@ -519,6 +601,12 @@ export default function Dashboard() {
               )}
             </TabsList>
           </div>
+
+          {showAssignments && (
+            <TabsContent value="assignments">
+              <WorkAssignmentManager assignments={workAssignments} userProfile={profile} onUpdate={handleRefresh} />
+            </TabsContent>
+          )}
 
           {showDeliveries && (
             <TabsContent value="deliveries">

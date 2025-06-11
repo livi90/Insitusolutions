@@ -47,12 +47,20 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
 
   const fetchWorkSites = async () => {
     try {
-      const { data, error } = await supabase.from("work_sites").select("*").eq("site_manager_id", userProfile.id)
+      // Con políticas V22, solo podemos ver nuestras propias obras
+      if (userProfile.role === "encargado_obra") {
+        const { data, error } = await supabase.from("work_sites").select("*").eq("site_manager_id", userProfile.id)
 
-      if (error) throw error
-      setWorkSites(data || [])
+        if (error) {
+          console.error("Error fetching work sites:", error)
+          setWorkSites([])
+        } else {
+          setWorkSites(data || [])
+        }
+      }
     } catch (error) {
       console.error("Error fetching work sites:", error)
+      setWorkSites([])
     }
   }
 
@@ -61,6 +69,7 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
     setLoading(true)
 
     try {
+      // Con políticas V22, solo encargados de obra pueden crear solicitudes
       const { error } = await supabase.from("warehouse_requests").insert({
         title: newRequest.title,
         description: newRequest.description,
@@ -97,6 +106,7 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
 
   const handleStatusUpdate = async (requestId: string, newStatus: string) => {
     try {
+      // Con políticas V22, solo oficial_almacen puede actualizar solicitudes
       const { error } = await supabase.from("warehouse_requests").update({ status: newStatus }).eq("id", requestId)
 
       if (error) throw error
@@ -158,14 +168,22 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
     }
   }
 
+  // Con políticas V22, verificar permisos
+  const canCreateRequest = userProfile.role === "encargado_obra"
+  const canUpdateRequest = userProfile.role === "oficial_almacen"
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-lg font-semibold">Solicitudes de Almacén</h2>
-          <p className="text-sm text-muted-foreground">Gestiona las solicitudes de materiales y equipos</p>
+          <p className="text-sm text-muted-foreground">
+            {userProfile.role === "encargado_obra"
+              ? "Gestiona las solicitudes de materiales y equipos"
+              : "Revisa y aprueba solicitudes de almacén"}
+          </p>
         </div>
-        {userProfile.role === "encargado_obra" && (
+        {canCreateRequest && (
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogTrigger asChild>
               <Button>
@@ -245,7 +263,7 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
                 <Package className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">No hay solicitudes</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  {userProfile.role === "encargado_obra"
+                  {canCreateRequest
                     ? "Comienza creando una nueva solicitud de almacén."
                     : "No hay solicitudes pendientes de revisión."}
                 </p>
@@ -279,7 +297,7 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
                   </p>
                 </div>
 
-                {userProfile.role === "oficial_almacen" && request.status === "pending" && (
+                {canUpdateRequest && request.status === "pending" && (
                   <div className="flex gap-2 mt-4">
                     <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(request.id, "approved")}>
                       Aprobar
@@ -290,7 +308,7 @@ export function WarehouseRequestManager({ requests, userProfile, onUpdate }: War
                   </div>
                 )}
 
-                {userProfile.role === "oficial_almacen" && request.status === "approved" && (
+                {canUpdateRequest && request.status === "approved" && (
                   <div className="flex gap-2 mt-4">
                     <Button size="sm" onClick={() => handleStatusUpdate(request.id, "completed")}>
                       Marcar como Completada

@@ -41,16 +41,22 @@ export function WorkSiteManager({ userProfile }: WorkSiteManagerProps) {
 
   const fetchWorkSites = async () => {
     try {
+      // Con políticas V22, solo podemos ver nuestras propias obras como encargado
       const { data, error } = await supabase
         .from("work_sites")
         .select("*")
         .eq("site_manager_id", userProfile.id)
         .order("created_at", { ascending: false })
 
-      if (error) throw error
-      setWorkSites(data || [])
+      if (error) {
+        console.error("Error fetching work sites:", error)
+        setWorkSites([])
+      } else {
+        setWorkSites(data || [])
+      }
     } catch (error) {
       console.error("Error fetching work sites:", error)
+      setWorkSites([])
     }
   }
 
@@ -59,6 +65,7 @@ export function WorkSiteManager({ userProfile }: WorkSiteManagerProps) {
     setLoading(true)
 
     try {
+      // Con políticas V22, solo encargados de obra pueden crear sitios
       const { error } = await supabase.from("work_sites").insert({
         ...newWorkSite,
         site_manager_id: userProfile.id,
@@ -87,6 +94,15 @@ export function WorkSiteManager({ userProfile }: WorkSiteManagerProps) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Solo encargados de obra pueden gestionar sitios con políticas V22
+  if (userProfile.role !== "encargado_obra") {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">Solo los encargados de obra pueden gestionar sitios de trabajo.</p>
+      </div>
+    )
   }
 
   return (

@@ -20,8 +20,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Package, Clock, CheckCircle, Truck, Calendar, MapPin, RefreshCw } from "lucide-react"
+import { Plus, Package, Clock, CheckCircle, Truck, Calendar, MapPin, RefreshCw, Users } from "lucide-react"
 import { theme, getStatusColor } from "@/lib/theme"
+import { WorkerSelector } from "./worker-selector"
 
 interface DeliveryManagerProps {
   deliveries: Delivery[]
@@ -32,6 +33,8 @@ interface DeliveryManagerProps {
 export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryManagerProps) {
   const { toast } = useToast()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showWorkerSelector, setShowWorkerSelector] = useState(false)
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [transporters, setTransporters] = useState<UserProfile[]>([])
   const [loadingTransporters, setLoadingTransporters] = useState(false)
@@ -47,20 +50,53 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
   const fetchTransporters = async () => {
     setLoadingTransporters(true)
     try {
-      const { data: transportersData, error } = await supabase
-        .from("user_profiles")
-        .select("*")
-        .eq("role", "transportista")
-        .order("full_name")
+      console.log("Fetching transporters for role:", userProfile.role)
 
-      if (error) throw error
+      if (userProfile.role === "oficial_almacen") {
+        // Primero intentar con la función personalizada
+        try {
+          const { data: functionData, error: functionError } = await supabase.rpc(
+            "get_available_workers_for_assignment",
+          )
 
-      setTransporters(transportersData || [])
+          if (functionError) {
+            console.warn("Function call failed, trying direct query:", functionError)
+            throw functionError
+          }
+
+          // Filtrar solo transportistas de la función
+          const transportersFromFunction = functionData?.filter((worker) => worker.role === "transportista") || []
+
+          if (transportersFromFunction.length > 0) {
+            console.log("Transporters from function:", transportersFromFunction)
+            setTransporters(transportersFromFunction)
+            return
+          }
+        } catch (funcError) {
+          console.warn("Function approach failed, trying direct query:", funcError)
+        }
+
+        // Si la función falla, intentar consulta directa
+        const { data: transportersData, error } = await supabase
+          .from("user_profiles")
+          .select("*")
+          .eq("role", "transportista")
+          .order("full_name")
+
+        if (error) {
+          console.error("Error fetching transporters:", error)
+          setTransporters([])
+        } else {
+          console.log("Transporters from direct query:", transportersData)
+          setTransporters(transportersData || [])
+        }
+      }
     } catch (error: any) {
       console.error("Error fetching transporters:", error)
+      setTransporters([])
       toast({
-        title: "Error",
-        description: `Error al cargar transportistas: ${error.message}`,
+        title: "Advertencia",
+        description: "No se pudieron cargar los transportistas. Verifica los permisos.",
         variant: "destructive",
       })
     } finally {
@@ -80,17 +116,33 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
     setLoading(true)
 
     try {
-      const { error } = await supabase.from("deliveries").insert({
-        ...newDelivery,
+      console.log("Creating delivery:", newDelivery)
+
+      const deliveryData = {
+        title: newDelivery.title,
+        description: newDelivery.description,
+        delivery_address: newDelivery.delivery_address,
         created_by: userProfile.id,
         scheduled_date: newDelivery.scheduled_date || null,
-      })
+        status: "pending",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
 
-      if (error) throw error
+      console.log("Inserting delivery with data:", deliveryData)
+
+      const { data, error } = await supabase.from("deliveries").insert(deliveryData).select().single()
+
+      if (error) {
+        console.error("Error creating delivery:", error)
+        throw error
+      }
+
+      console.log("Delivery created successfully:", data)
 
       toast({
         title: "Entrega creada",
-        description: "La entrega ha sido creada exitosamente",
+        description: "La entrega ha sido creada exitosamente. Ahora puedes asignar transportista y personal.",
       })
 
       setNewDelivery({
@@ -102,9 +154,10 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
       setShowCreateDialog(false)
       onUpdate()
     } catch (error: any) {
+      console.error("Error in handleCreateDelivery:", error)
       toast({
         title: "Error",
-        description: error.message,
+        description: `Error al crear entrega: ${error.message}`,
         variant: "destructive",
       })
     } finally {
@@ -140,6 +193,43 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
     }
   }
 
+  const handleAssignTransporter = async (deliveryId: string, transporterId: string) => {
+    try {
+      console.log("Assigning transporter:", { deliveryId, transporterId })
+
+      // Usar la función personalizada para asignar transportista
+      const { data, error } = await supabase.rpc("assign_transporter_to_delivery", {
+        delivery_id: deliveryId,
+        transporter_id: transporterId,
+      })
+
+      if (error) {
+        console.error("Error with function, trying direct update:", error)
+        // Si la función falla, intentar actualización directa
+        await handleStatusUpdate(deliveryId, "assigned", transporterId)
+      } else {
+        console.log("Transporter assigned successfully via function")
+        toast({
+          title: "Transportista asignado",
+          description: "El transportista ha sido asignado exitosamente",
+        })
+        onUpdate()
+      }
+    } catch (error: any) {
+      console.error("Error assigning transporter:", error)
+      toast({
+        title: "Error",
+        description: `Error al asignar transportista: ${error.message}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleAssignWorkers = (deliveryId: string) => {
+    setSelectedDeliveryId(deliveryId)
+    setShowWorkerSelector(true)
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "pending":
@@ -173,15 +263,23 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
     }
   }
 
-  const canCreateDelivery = userProfile.role === "oficial_almacen" || userProfile.role === "encargado_obra"
-  const canAssignDelivery = userProfile.role === "oficial_almacen" && userProfile.permission_level === "admin"
+  // Con políticas V22 restauradas, verificar permisos según el rol
+  const canCreateDelivery = userProfile.role === "oficial_almacen"
+  const canAssignDelivery = userProfile.role === "oficial_almacen"
+  const canAssignWorkers = userProfile.role === "oficial_almacen" || userProfile.role === "encargado_obra"
 
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-lg sm:text-xl font-semibold">Gestión de Entregas</h2>
-          <p className="text-sm text-muted-foreground">Administra las entregas y su estado</p>
+          <p className="text-sm text-muted-foreground">
+            {userProfile.role === "oficial_almacen"
+              ? "Administra las entregas, asigna transportistas y personal"
+              : userProfile.role === "transportista"
+                ? "Entregas asignadas a ti"
+                : "Entregas relacionadas con tus obras"}
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button variant="outline" size="sm" onClick={onUpdate} className="w-full sm:w-auto">
@@ -199,7 +297,9 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
               <DialogContent className="max-w-md sm:max-w-lg mx-auto">
                 <DialogHeader>
                   <DialogTitle>Crear Nueva Entrega</DialogTitle>
-                  <DialogDescription>Completa los detalles de la nueva entrega</DialogDescription>
+                  <DialogDescription>
+                    Completa los detalles de la nueva entrega. Después podrás asignar transportista y personal.
+                  </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreateDelivery} className="space-y-4">
                   <div className="space-y-2">
@@ -338,24 +438,53 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
                   {userProfile.role === "oficial_almacen" && (
                     <>
                       {delivery.status === "pending" && canAssignDelivery && (
-                        <Select
-                          onValueChange={(value) => handleStatusUpdate(delivery.id, "assigned", value)}
-                          disabled={loadingTransporters}
-                        >
-                          <SelectTrigger className="w-full sm:w-[200px]">
-                            <SelectValue placeholder={loadingTransporters ? "Cargando..." : "Asignar transportista"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {transporters.map((transporter) => (
-                              <SelectItem key={transporter.id} value={transporter.id}>
-                                <div className="flex items-center gap-2">
-                                  <Truck className="h-4 w-4" />
-                                  {transporter.full_name}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          {/* Asignar transportista */}
+                          {transporters.length > 0 ? (
+                            <Select
+                              onValueChange={(value) => handleAssignTransporter(delivery.id, value)}
+                              disabled={loadingTransporters}
+                            >
+                              <SelectTrigger className="w-full sm:w-[200px]">
+                                <SelectValue
+                                  placeholder={loadingTransporters ? "Cargando..." : "Asignar transportista"}
+                                />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {transporters.map((transporter) => (
+                                  <SelectItem key={transporter.id} value={transporter.id}>
+                                    <div className="flex items-center gap-2">
+                                      <Truck className="h-4 w-4" />
+                                      {transporter.full_name}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={fetchTransporters}
+                              disabled={loadingTransporters}
+                              className="w-full sm:w-auto"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              {loadingTransporters ? "Cargando..." : "Cargar Transportistas"}
+                            </Button>
+                          )}
+
+                          {/* Asignar personal */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAssignWorkers(delivery.id)}
+                            className="w-full sm:w-auto"
+                          >
+                            <Users className="h-4 w-4 mr-2" />
+                            Asignar Personal
+                          </Button>
+                        </div>
                       )}
                       {delivery.status === "delivered" && (
                         <Button
@@ -369,12 +498,34 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
                       )}
                     </>
                   )}
+
+                  {/* Asignar trabajadores - disponible para encargado de obra */}
+                  {userProfile.role === "encargado_obra" && canAssignWorkers && delivery.status === "pending" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAssignWorkers(delivery.id)}
+                      className="w-full sm:w-auto"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Asignar Personal
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
           ))
         )}
       </div>
+
+      {/* Worker Selector Dialog */}
+      <WorkerSelector
+        open={showWorkerSelector}
+        onOpenChange={setShowWorkerSelector}
+        deliveryId={selectedDeliveryId}
+        userProfile={userProfile}
+        onWorkersAssigned={onUpdate}
+      />
     </div>
   )
 }

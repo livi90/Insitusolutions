@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { CheckCircle, Clock, Clipboard, AlertCircle, RefreshCw } from "lucide-react"
-import { getStatusColor } from "@/lib/theme"
+import { CheckCircle, Clock, Clipboard, AlertCircle, RefreshCw, Users, Settings } from "lucide-react"
+import { getStatusColor, getRoleLabel } from "@/lib/theme"
 
 interface WorkAssignmentManagerProps {
   assignments: WorkAssignment[]
@@ -78,12 +78,28 @@ export function WorkAssignmentManager({ assignments, userProfile, onUpdate }: Wo
     }
   }
 
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case "operario_maquinaria":
+        return <Settings className="h-4 w-4" />
+      case "peon_logistica":
+        return <Users className="h-4 w-4" />
+      default:
+        return <Users className="h-4 w-4" />
+    }
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-lg sm:text-xl font-semibold">Mis Tareas Asignadas</h2>
-          <p className="text-sm text-muted-foreground">Gestiona tus tareas y actualiza su estado</p>
+          <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
+            {getRoleIcon(userProfile.role)}
+            Mis Tareas Asignadas
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Como {getRoleLabel(userProfile.role)}, gestiona tus tareas y actualiza su estado
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={onUpdate} className="w-full sm:w-auto">
           <RefreshCw className="h-4 w-4 mr-2" />
@@ -96,11 +112,18 @@ export function WorkAssignmentManager({ assignments, userProfile, onUpdate }: Wo
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8">
-                <Clipboard className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="p-3 bg-gray-100 rounded-full w-fit mx-auto mb-4">{getRoleIcon(userProfile.role)}</div>
                 <h3 className="mt-2 text-sm font-medium text-gray-900">No tienes tareas asignadas</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Cuando te asignen tareas, aparecerán aquí para que puedas gestionarlas.
+                  Cuando te asignen tareas como {getRoleLabel(userProfile.role)}, aparecerán aquí para que puedas
+                  gestionarlas.
                 </p>
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs text-blue-700">
+                    <strong>Tip:</strong> Las tareas se asignan desde el módulo de entregas por parte del oficial de
+                    almacén o encargado de obra.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -110,8 +133,16 @@ export function WorkAssignmentManager({ assignments, userProfile, onUpdate }: Wo
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base sm:text-lg">{assignment.title}</CardTitle>
+                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                      {getRoleIcon(userProfile.role)}
+                      {assignment.title}
+                    </CardTitle>
                     <CardDescription className="mt-1">{assignment.description}</CardDescription>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="outline" className="text-xs">
+                        {getRoleLabel(userProfile.role)}
+                      </Badge>
+                    </div>
                   </div>
                   <Badge className={`${getStatusColor(assignment.status)} flex-shrink-0`}>
                     <div className="flex items-center gap-1">
@@ -125,12 +156,12 @@ export function WorkAssignmentManager({ assignments, userProfile, onUpdate }: Wo
                 <div className="space-y-2 sm:space-y-3">
                   {assignment.delivery_id && (
                     <p className="text-sm">
-                      <strong>Entrega relacionada:</strong> {assignment.delivery_id}
+                      <strong>Entrega relacionada:</strong> {assignment.delivery_id.substring(0, 8)}...
                     </p>
                   )}
                   {assignment.work_site_id && (
                     <p className="text-sm">
-                      <strong>Obra:</strong> {assignment.work_site_id}
+                      <strong>Obra:</strong> {assignment.work_site_id.substring(0, 8)}...
                     </p>
                   )}
                   {assignment.scheduled_date && (
@@ -143,6 +174,9 @@ export function WorkAssignmentManager({ assignments, userProfile, onUpdate }: Wo
                       <strong>Completada:</strong> {new Date(assignment.completed_date).toLocaleString()}
                     </p>
                   )}
+                  <p className="text-sm">
+                    <strong>Asignada:</strong> {new Date(assignment.created_at).toLocaleString()}
+                  </p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 mt-4">
@@ -168,12 +202,46 @@ export function WorkAssignmentManager({ assignments, userProfile, onUpdate }: Wo
                       Completar Tarea
                     </Button>
                   )}
+                  {assignment.status === "completed" && (
+                    <div className="flex items-center gap-2 text-green-600 text-sm">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Tarea completada exitosamente</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           ))
         )}
       </div>
+
+      {/* Información adicional para trabajadores */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">{getRoleIcon(userProfile.role)}</div>
+            <div>
+              <h3 className="font-semibold text-blue-900 mb-2">Información para {getRoleLabel(userProfile.role)}</h3>
+              <div className="text-sm text-blue-800 space-y-1">
+                {userProfile.role === "operario_maquinaria" && (
+                  <>
+                    <p>• Responsable de operar maquinaria especializada</p>
+                    <p>• Manejo de equipos pesados y herramientas técnicas</p>
+                    <p>• Supervisión de procesos de carga y descarga</p>
+                  </>
+                )}
+                {userProfile.role === "peon_logistica" && (
+                  <>
+                    <p>• Apoyo en tareas de organización y empaque</p>
+                    <p>• Carga y descarga de materiales menores</p>
+                    <p>• Preparación y clasificación de inventario</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
