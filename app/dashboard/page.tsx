@@ -22,17 +22,19 @@ import { WarehouseRequestManager } from "@/components/warehouse-request-manager"
 import { WorkAssignmentManager } from "@/components/work-assignment-manager"
 import { getRoleLabel, getRoleColor } from "@/lib/theme"
 import { DeliveryAssignmentsView } from "@/components/delivery-assignments-view"
+import { useToast } from "@/hooks/use-toast"
 
 export default function Dashboard() {
   const router = useRouter()
+  const { toast } = useToast()
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [signingOut, setSigningOut] = useState(false)
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [warehouseRequests, setWarehouseRequests] = useState<WarehouseRequest[]>([])
   const [workAssignments, setWorkAssignments] = useState<WorkAssignment[]>([])
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("deliveries")
   const [stats, setStats] = useState({
     totalDeliveries: 0,
@@ -105,11 +107,21 @@ export default function Dashboard() {
 
     checkUser()
 
+    // Escuchar cambios en el estado de autenticación
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_OUT") {
+      console.log("Auth state changed:", event, session?.user?.id)
+
+      if (event === "SIGNED_OUT" || !session) {
+        console.log("User signed out, redirecting to login...")
+        setUser(null)
+        setProfile(null)
         router.push("/login")
+      } else if (event === "SIGNED_IN" && session) {
+        console.log("User signed in:", session.user.id)
+        setUser(session.user)
+        await fetchUserProfile(session.user.id)
       }
     })
 
@@ -296,12 +308,53 @@ export default function Dashboard() {
   }
 
   const handleSignOut = async () => {
+    if (signingOut) return // Prevenir múltiples clics
+
+    setSigningOut(true)
+
     try {
-      await supabase.auth.signOut()
+      console.log("Iniciando proceso de cierre de sesión...")
+
+      // Limpiar estado local inmediatamente
+      setUser(null)
+      setProfile(null)
+      setDeliveries([])
+      setNotifications([])
+      setWarehouseRequests([])
+      setWorkAssignments([])
+
+      // Cerrar sesión en Supabase
+      const { error } = await supabase.auth.signOut()
+
+      if (error) {
+        console.error("Error during sign out:", error)
+        toast({
+          title: "Error al cerrar sesión",
+          description: error.message,
+          variant: "destructive",
+        })
+      } else {
+        console.log("Sign out successful")
+        toast({
+          title: "Sesión cerrada",
+          description: "Has cerrado sesión exitosamente",
+        })
+      }
+
+      // Redirigir al login independientemente del resultado
       router.push("/login")
     } catch (err: any) {
-      console.error("Error signing out:", err)
+      console.error("Unexpected error during sign out:", err)
+      toast({
+        title: "Error inesperado",
+        description: "Ocurrió un error al cerrar sesión",
+        variant: "destructive",
+      })
+
+      // Forzar redirección incluso si hay error
       router.push("/login")
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -432,18 +485,24 @@ export default function Dashboard() {
                 variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
+                disabled={signingOut}
                 className="text-white hover:bg-white/20 hover:text-white hidden sm:flex"
               >
-                <LogOut className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
-                <span className="hidden sm:inline">Salir</span>
+                {signingOut ? (
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 animate-spin" />
+                ) : (
+                  <LogOut className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" />
+                )}
+                <span className="hidden sm:inline">{signingOut ? "Saliendo..." : "Salir"}</span>
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
+                disabled={signingOut}
                 className="text-white hover:bg-white/20 hover:text-white sm:hidden p-2"
               >
-                <LogOut className="h-4 w-4" />
+                {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
               </Button>
             </div>
           </div>
