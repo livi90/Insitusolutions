@@ -49,6 +49,14 @@ export default function Dashboard() {
         return {
           background: "linear-gradient(to right, #f97316, #ea580c)",
         }
+      case "peon_logistica":
+        return {
+          background: "linear-gradient(to right, #0891b2, #0e7490)",
+        }
+      case "operario_maquinaria":
+        return {
+          background: "linear-gradient(to right, #7c3aed, #6d28d9)",
+        }
       default:
         return {
           background: "linear-gradient(to right, #2563eb, #1d4ed8)",
@@ -81,13 +89,7 @@ export default function Dashboard() {
       } catch (err: any) {
         console.error("Error checking authentication:", err)
         setError(err.message)
-
-        // Si hay error de permisos, redirigir al login
-        if (err.message.includes("permission denied") || err.message.includes("policy")) {
-          console.log("Permission error detected, redirecting to login...")
-          router.push("/login")
-          return
-        }
+        router.push("/login")
       } finally {
         setLoading(false)
       }
@@ -122,59 +124,20 @@ export default function Dashboard() {
     try {
       console.log("Fetching profile for user:", userId)
 
+      // Consulta simple y directa
       const { data: profileData, error: profileError } = await supabase
         .from("user_profiles")
         .select("*")
         .eq("id", userId)
-        .single()
+        .maybeSingle()
 
       if (profileError) {
         console.error("Profile error:", profileError)
-
-        if (profileError.code === "PGRST116") {
-          console.log("Profile not found, creating new profile...")
-
-          // Crear perfil con datos del usuario autenticado
-          const newProfile: UserProfile = {
-            id: userId,
-            email: user?.email || "",
-            full_name: user?.user_metadata?.full_name || "Usuario",
-            role: (user?.user_metadata?.role as any) || "transportista",
-            permission_level: (user?.user_metadata?.permission_level as any) || "normal",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }
-
-          const { error: createError } = await supabase.from("user_profiles").insert(newProfile)
-
-          if (createError) {
-            console.error("Error creating profile:", createError)
-            // Usar perfil local si no se puede crear en la BD
-            setProfile(newProfile)
-          } else {
-            console.log("Profile created successfully")
-            setProfile(newProfile)
-          }
-        } else {
-          throw profileError
-        }
-      } else {
-        console.log("Profile found:", profileData)
-        setProfile(profileData)
+        throw profileError
       }
 
-      // Intentar cargar datos solo si tenemos un perfil
-      const currentProfile = profileData || profile
-      if (currentProfile) {
-        await fetchData(userId, currentProfile)
-      }
-    } catch (err: any) {
-      console.error("Error fetching user profile:", err)
-
-      if (err.message.includes("permission denied") || err.message.includes("policy")) {
-        console.log("Permission error in profile fetch, using fallback profile")
-
-        // Crear perfil de fallback
+      if (!profileData) {
+        console.log("Profile not found, creating fallback profile")
         const fallbackProfile: UserProfile = {
           id: userId,
           email: user?.email || "",
@@ -184,12 +147,20 @@ export default function Dashboard() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
-
         setProfile(fallbackProfile)
-        await fetchData(userId, fallbackProfile)
       } else {
-        throw err
+        console.log("Profile found:", profileData)
+        setProfile(profileData)
       }
+
+      // Cargar datos solo si tenemos un perfil
+      const currentProfile = profileData || profile
+      if (currentProfile) {
+        await fetchData(userId, currentProfile)
+      }
+    } catch (err: any) {
+      console.error("Error fetching user profile:", err)
+      setError(err.message)
     }
   }
 
@@ -197,48 +168,29 @@ export default function Dashboard() {
     console.log("Fetching data for user:", userId, "with role:", userProfile.role)
 
     try {
-      // Fetch deliveries con manejo de errores mejorado
+      // Fetch deliveries con consulta simple
       try {
         console.log("Fetching deliveries...")
-
-        let deliveriesData: Delivery[] = []
-
-        // Consulta simple para evitar problemas de permisos
-        const { data, error } = await supabase
+        const { data: deliveriesData, error: deliveriesError } = await supabase
           .from("deliveries")
           .select("*")
           .order("created_at", { ascending: false })
           .limit(50)
 
-        if (error) {
-          console.error("Error fetching deliveries:", error)
-          if (!error.message.includes("permission denied")) {
-            throw error
-          }
+        if (deliveriesError) {
+          console.error("Error fetching deliveries:", deliveriesError)
         } else {
-          // Filtrar en el cliente según el rol
-          if (userProfile.role === "transportista") {
-            deliveriesData = (data || []).filter((d) => d.assigned_to === userId || d.created_by === userId)
-          } else if (userProfile.role === "encargado_obra") {
-            deliveriesData = (data || []).filter(
-              (d) => d.created_by === userId || d.work_site_id, // Simplificado
-            )
-          } else {
-            deliveriesData = data || []
-          }
+          console.log("Deliveries loaded:", deliveriesData?.length || 0)
+          setDeliveries(deliveriesData || [])
         }
-
-        console.log("Deliveries loaded:", deliveriesData.length)
-        setDeliveries(deliveriesData)
       } catch (err) {
         console.error("Error in deliveries fetch:", err)
         setDeliveries([])
       }
 
-      // Fetch notifications con manejo de errores
+      // Fetch notifications con consulta simple
       try {
         console.log("Fetching notifications...")
-
         const { data: notificationsData, error: notificationsError } = await supabase
           .from("notifications")
           .select("*")
@@ -248,9 +200,6 @@ export default function Dashboard() {
 
         if (notificationsError) {
           console.error("Error fetching notifications:", notificationsError)
-          if (!notificationsError.message.includes("permission denied")) {
-            throw notificationsError
-          }
         } else {
           console.log("Notifications loaded:", notificationsData?.length || 0)
           setNotifications(notificationsData || [])
@@ -260,10 +209,9 @@ export default function Dashboard() {
         setNotifications([])
       }
 
-      // Fetch warehouse requests con manejo de errores
+      // Fetch warehouse requests con consulta simple
       try {
         console.log("Fetching warehouse requests...")
-
         if (userProfile.role === "encargado_obra" || userProfile.role === "oficial_almacen") {
           const { data: requestsData, error: requestsError } = await supabase
             .from("warehouse_requests")
@@ -273,18 +221,9 @@ export default function Dashboard() {
 
           if (requestsError) {
             console.error("Error fetching warehouse requests:", requestsError)
-            if (!requestsError.message.includes("permission denied")) {
-              throw requestsError
-            }
           } else {
-            // Filtrar en el cliente si es encargado de obra
-            const filteredRequests =
-              userProfile.role === "encargado_obra"
-                ? (requestsData || []).filter((r) => r.requested_by === userId)
-                : requestsData || []
-
-            console.log("Warehouse requests loaded:", filteredRequests.length)
-            setWarehouseRequests(filteredRequests)
+            console.log("Warehouse requests loaded:", requestsData?.length || 0)
+            setWarehouseRequests(requestsData || [])
           }
         }
       } catch (err) {
@@ -308,10 +247,7 @@ export default function Dashboard() {
       console.log("Data fetch completed successfully")
     } catch (err: any) {
       console.error("Error fetching data:", err)
-
-      if (err.message.includes("permission denied")) {
-        setError("Error de permisos en la base de datos. Por favor, ejecuta los scripts de corrección.")
-      }
+      setError(`Error al cargar datos: ${err.message}`)
     }
   }
 

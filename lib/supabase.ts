@@ -5,7 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Types - Versión 23 restaurada
+// Types - Actualizado con los 5 roles
 export type Database = {
   public: {
     Tables: {
@@ -14,7 +14,7 @@ export type Database = {
           id: string
           email: string
           full_name: string
-          role: "oficial_almacen" | "transportista" | "encargado_obra"
+          role: "oficial_almacen" | "transportista" | "encargado_obra" | "peon_logistica" | "operario_maquinaria"
           permission_level: "admin" | "normal"
           created_at: string
           updated_at: string
@@ -23,12 +23,12 @@ export type Database = {
           id: string
           email: string
           full_name: string
-          role: "oficial_almacen" | "transportista" | "encargado_obra"
+          role: "oficial_almacen" | "transportista" | "encargado_obra" | "peon_logistica" | "operario_maquinaria"
           permission_level?: "admin" | "normal"
         }
         Update: {
           full_name?: string
-          role?: "oficial_almacen" | "transportista" | "encargado_obra"
+          role?: "oficial_almacen" | "transportista" | "encargado_obra" | "peon_logistica" | "operario_maquinaria"
           permission_level?: "admin" | "normal"
         }
       }
@@ -126,6 +126,38 @@ export type Database = {
           status?: string
         }
       }
+      work_assignments: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          status: string
+          created_by: string
+          assigned_to: string
+          delivery_id: string | null
+          work_site_id: string | null
+          scheduled_date: string | null
+          completed_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          title: string
+          description?: string
+          created_by: string
+          assigned_to: string
+          delivery_id?: string
+          work_site_id?: string
+          scheduled_date?: string
+        }
+        Update: {
+          title?: string
+          description?: string
+          status?: string
+          scheduled_date?: string
+          completed_date?: string
+        }
+      }
       equipment: {
         Row: {
           id: string
@@ -157,5 +189,6 @@ export type Delivery = Database["public"]["Tables"]["deliveries"]["Row"]
 export type Notification = Database["public"]["Tables"]["notifications"]["Row"]
 export type WorkSite = Database["public"]["Tables"]["work_sites"]["Row"]
 export type WarehouseRequest = Database["public"]["Tables"]["warehouse_requests"]["Row"]
+export type WorkAssignment = Database["public"]["Tables"]["work_assignments"]["Row"]
 export type Equipment = Database["public"]["Tables"]["equipment"]["Row"]
 export type Worker = Database["public"]["Tables"]["workers"]["Row"]

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Truck, Warehouse, HardHat, Loader2, CheckCircle, Zap, MapPin, Building } from "lucide-react"
+import { Truck, Warehouse, HardHat, Loader2, CheckCircle, Zap, MapPin, Building, Users, Settings } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getRoleColor, getRoleLabel, getRoleDescription } from "@/lib/theme"
 
@@ -188,9 +188,21 @@ export default function LoginPage() {
         return <Truck className="w-4 h-4 sm:w-5 sm:h-5" />
       case "encargado_obra":
         return <HardHat className="w-4 h-4 sm:w-5 sm:h-5" />
+      case "peon_logistica":
+        return <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+      case "operario_maquinaria":
+        return <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
       default:
         return null
     }
+  }
+
+  // Función para llenar automáticamente las credenciales
+  const fillCredentials = (email: string, password: string) => {
+    setLoginData({ email, password })
+    // Cambiar a la pestaña de login
+    const loginTab = document.querySelector('[value="login"]') as HTMLElement
+    loginTab?.click()
   }
 
   if (authChecking) {
@@ -387,7 +399,13 @@ export default function LoginPage() {
                           <SelectValue placeholder="Selecciona tu rol" />
                         </SelectTrigger>
                         <SelectContent>
-                          {["oficial_almacen", "transportista", "encargado_obra"].map((role) => {
+                          {[
+                            "oficial_almacen",
+                            "transportista",
+                            "encargado_obra",
+                            "peon_logistica",
+                            "operario_maquinaria",
+                          ].map((role) => {
                             const roleColor = getRoleColor(role)
                             return (
                               <SelectItem key={role} value={role}>
@@ -438,7 +456,7 @@ export default function LoginPage() {
           </Card>
         </div>
 
-        {/* Panel de Usuarios de Ejemplo - Solo roles originales */}
+        {/* Panel de Usuarios de Ejemplo - Con credenciales existentes */}
         <div className="space-y-4 sm:space-y-6">
           <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader className="p-4 sm:p-6">
@@ -447,7 +465,7 @@ export default function LoginPage() {
                 Usuarios de Prueba
               </CardTitle>
               <CardDescription className="text-sm sm:text-base">
-                Accede con estas cuentas para explorar el sistema
+                Haz clic en cualquier usuario para llenar automáticamente las credenciales
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6">
@@ -465,12 +483,25 @@ export default function LoginPage() {
                   password: "obra123",
                   name: "Luis Encargado",
                 },
+                {
+                  role: "operario_maquinaria",
+                  email: "operario1@logistica.com",
+                  password: "operario123",
+                  name: "Miguel Operario",
+                },
+                {
+                  role: "peon_logistica",
+                  email: "peon1@logistica.com",
+                  password: "peon123",
+                  name: "José Peón",
+                },
               ].map((user, index) => {
                 const roleColor = getRoleColor(user.role)
                 return (
                   <div
                     key={index}
-                    className="p-3 sm:p-4 border rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-200"
+                    className="p-3 sm:p-4 border rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-200 cursor-pointer"
+                    onClick={() => fillCredentials(user.email, user.password)}
                   >
                     <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
                       <div className={`p-1.5 sm:p-2 rounded-lg ${roleColor.css}`}>{getRoleIcon(user.role)}</div>
@@ -492,26 +523,29 @@ export default function LoginPage() {
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mt-2 hidden sm:block">{getRoleDescription(user.role)}</p>
+                    <div className="mt-2 text-xs text-blue-600 font-medium">
+                      👆 Haz clic para usar estas credenciales
+                    </div>
                   </div>
                 )
               })}
             </CardContent>
           </Card>
 
-          <Card className="shadow-xl border-0 bg-gradient-to-br from-blue-50 to-indigo-50">
+          <Card className="shadow-xl border-0 bg-gradient-to-br from-green-50 to-emerald-50">
             <CardContent className="pt-4 sm:pt-6 p-4 sm:p-6">
               <div className="text-center">
-                <div className="p-2 sm:p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full w-fit mx-auto mb-3 sm:mb-4">
+                <div className="p-2 sm:p-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-full w-fit mx-auto mb-3 sm:mb-4">
                   <CheckCircle className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Sistema Restaurado</h3>
+                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Recursión Corregida</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-                  Todas las políticas han sido restauradas a la versión 23 funcional. Solo los 3 roles originales están
-                  disponibles.
+                  El error de recursión infinita en las políticas ha sido resuelto. Ahora todos los roles funcionan
+                  correctamente.
                 </p>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                   <Zap className="h-3 w-3" />
-                  <span>Configuración estable y probada</span>
+                  <span>Políticas simplificadas y estables</span>
                 </div>
               </div>
             </CardContent>

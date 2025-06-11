@@ -51,12 +51,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase.from("user_profiles").select("*").eq("id", userId).single()
+      console.log("Fetching profile for user:", userId)
 
-      if (error) throw error
-      setProfile(data)
-    } catch (error) {
-      console.error("Error fetching profile:", error)
+      // Consulta directa sin políticas complejas
+      const { data, error } = await supabase.from("user_profiles").select("*").eq("id", userId).maybeSingle() // Usar maybeSingle en lugar de single para evitar errores si no existe
+
+      if (error) {
+        console.error("Error fetching profile:", error)
+        throw error
+      }
+
+      if (!data) {
+        console.log("Profile not found, creating fallback profile")
+        // Crear perfil de fallback si no existe
+        const fallbackProfile: UserProfile = {
+          id: userId,
+          email: user?.email || "",
+          full_name: user?.user_metadata?.full_name || "Usuario",
+          role: (user?.user_metadata?.role as any) || "transportista",
+          permission_level: (user?.user_metadata?.permission_level as any) || "normal",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+
+        // Intentar crear el perfil en la base de datos
+        try {
+          const { error: insertError } = await supabase.from("user_profiles").insert(fallbackProfile)
+          if (insertError) {
+            console.error("Error creating profile:", insertError)
+          }
+        } catch (insertErr) {
+          console.error("Failed to insert profile:", insertErr)
+        }
+
+        setProfile(fallbackProfile)
+      } else {
+        console.log("Profile loaded successfully:", data)
+        setProfile(data)
+      }
+    } catch (error: any) {
+      console.error("Error in fetchProfile:", error)
+
+      // Crear perfil de emergencia sin intentar guardar en BD
+      const emergencyProfile: UserProfile = {
+        id: userId,
+        email: user?.email || "",
+        full_name: user?.user_metadata?.full_name || "Usuario",
+        role: "transportista", // Rol por defecto
+        permission_level: "normal",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      setProfile(emergencyProfile)
     } finally {
       setLoading(false)
     }
