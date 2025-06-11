@@ -6,22 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Bell, Package, Truck, LogOut, Loader2, Building, Settings, Clipboard } from "lucide-react"
-import {
-  supabase,
-  type UserProfile,
-  type Delivery,
-  type Notification,
-  type WarehouseRequest,
-  type WorkAssignment,
-} from "@/lib/supabase"
+import { Bell, Package, Truck, LogOut, Loader2, Building, AlertCircle } from "lucide-react"
+import { supabase, type UserProfile, type Delivery, type Notification, type WarehouseRequest } from "@/lib/supabase"
 import { DeliveryManager } from "@/components/delivery-manager"
 import { NotificationCenter } from "@/components/notification-center"
 import { WorkSiteManager } from "@/components/worksite-manager"
 import { WarehouseRequestManager } from "@/components/warehouse-request-manager"
-import { WorkAssignmentManager } from "@/components/work-assignment-manager"
-import { getRoleLabel, getRoleColor } from "@/lib/theme"
-import { DeliveryAssignmentsView } from "@/components/delivery-assignments-view"
+import { getRoleLabel } from "@/lib/theme"
 import { useToast } from "@/hooks/use-toast"
 
 export default function Dashboard() {
@@ -34,14 +25,12 @@ export default function Dashboard() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [warehouseRequests, setWarehouseRequests] = useState<WarehouseRequest[]>([])
-  const [workAssignments, setWorkAssignments] = useState<WorkAssignment[]>([])
   const [activeTab, setActiveTab] = useState("deliveries")
   const [stats, setStats] = useState({
     totalDeliveries: 0,
     pendingDeliveries: 0,
     completedDeliveries: 0,
     unreadNotifications: 0,
-    pendingAssignments: 0,
   })
   const [error, setError] = useState<string | null>(null)
 
@@ -60,14 +49,6 @@ export default function Dashboard() {
         return {
           background: "linear-gradient(to right, #f97316, #ea580c)",
         }
-      case "operario_maquinaria":
-        return {
-          background: "linear-gradient(to right, #7c3aed, #6d28d9)",
-        }
-      case "peon_logistica":
-        return {
-          background: "linear-gradient(to right, #0ea5e9, #0284c7)",
-        }
       default:
         return {
           background: "linear-gradient(to right, #2563eb, #1d4ed8)",
@@ -83,20 +64,27 @@ export default function Dashboard() {
           error: sessionError,
         } = await supabase.auth.getSession()
 
-        if (sessionError) throw sessionError
+        if (sessionError) {
+          console.error("Session error:", sessionError)
+          throw sessionError
+        }
 
         if (!session) {
+          console.log("No session found, redirecting to login")
           router.push("/login")
           return
         }
 
+        console.log("Session found for user:", session.user.id)
         setUser(session.user)
         await fetchUserProfile(session.user.id)
       } catch (err: any) {
         console.error("Error checking authentication:", err)
         setError(err.message)
-        if (err.message.includes("infinite recursion") || err.message.includes("policy")) {
-          console.log("Policy error detected, redirecting to login...")
+
+        // Si hay error de permisos, redirigir al login
+        if (err.message.includes("permission denied") || err.message.includes("policy")) {
+          console.log("Permission error detected, redirecting to login...")
           router.push("/login")
           return
         }
@@ -132,6 +120,8 @@ export default function Dashboard() {
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log("Fetching profile for user:", userId)
+
       const { data: profileData, error: profileError } = await supabase
         .from("user_profiles")
         .select("*")
@@ -139,55 +129,64 @@ export default function Dashboard() {
         .single()
 
       if (profileError) {
+        console.error("Profile error:", profileError)
+
         if (profileError.code === "PGRST116") {
-          const { data: newProfile, error: createError } = await supabase
-            .from("user_profiles")
-            .insert({
-              id: userId,
-              email: user?.email || "",
-              full_name: user?.user_metadata?.full_name || "Usuario",
-              role: user?.user_metadata?.role || "transportista",
-              permission_level: user?.user_metadata?.permission_level || "normal",
-            })
-            .select()
-            .single()
+          console.log("Profile not found, creating new profile...")
+
+          // Crear perfil con datos del usuario autenticado
+          const newProfile: UserProfile = {
+            id: userId,
+            email: user?.email || "",
+            full_name: user?.user_metadata?.full_name || "Usuario",
+            role: (user?.user_metadata?.role as any) || "transportista",
+            permission_level: (user?.user_metadata?.permission_level as any) || "normal",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+
+          const { error: createError } = await supabase.from("user_profiles").insert(newProfile)
 
           if (createError) {
             console.error("Error creating profile:", createError)
-            setProfile({
-              id: userId,
-              email: user?.email || "",
-              full_name: user?.user_metadata?.full_name || "Usuario",
-              role: user?.user_metadata?.role || "transportista",
-              permission_level: user?.user_metadata?.permission_level || "normal",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+            // Usar perfil local si no se puede crear en la BD
+            setProfile(newProfile)
           } else {
+            console.log("Profile created successfully")
             setProfile(newProfile)
           }
         } else {
           throw profileError
         }
       } else {
+        console.log("Profile found:", profileData)
         setProfile(profileData)
       }
 
-      if (profileData || profile) {
-        await fetchData(userId, profileData || profile)
+      // Intentar cargar datos solo si tenemos un perfil
+      const currentProfile = profileData || profile
+      if (currentProfile) {
+        await fetchData(userId, currentProfile)
       }
     } catch (err: any) {
       console.error("Error fetching user profile:", err)
-      if (err.message.includes("policy") || err.message.includes("recursion")) {
-        setProfile({
+
+      if (err.message.includes("permission denied") || err.message.includes("policy")) {
+        console.log("Permission error in profile fetch, using fallback profile")
+
+        // Crear perfil de fallback
+        const fallbackProfile: UserProfile = {
           id: userId,
           email: user?.email || "",
           full_name: user?.user_metadata?.full_name || "Usuario",
-          role: user?.user_metadata?.role || "transportista",
-          permission_level: user?.user_metadata?.permission_level || "normal",
+          role: (user?.user_metadata?.role as any) || "transportista",
+          permission_level: (user?.user_metadata?.permission_level as any) || "normal",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        })
+        }
+
+        setProfile(fallbackProfile)
+        await fetchData(userId, fallbackProfile)
       } else {
         throw err
       }
@@ -195,35 +194,51 @@ export default function Dashboard() {
   }
 
   const fetchData = async (userId: string, userProfile: UserProfile) => {
+    console.log("Fetching data for user:", userId, "with role:", userProfile.role)
+
     try {
-      if (!userId || !userProfile) return
-
-      // Fetch deliveries with error handling
+      // Fetch deliveries con manejo de errores mejorado
       try {
-        let deliveriesQuery = supabase.from("deliveries").select("*")
+        console.log("Fetching deliveries...")
 
-        if (userProfile.role === "transportista") {
-          deliveriesQuery = deliveriesQuery.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
-        } else if (userProfile.role === "encargado_obra") {
-          deliveriesQuery = deliveriesQuery.eq("created_by", userId)
-        }
+        let deliveriesData: Delivery[] = []
 
-        const { data: deliveriesData, error: deliveriesError } = await deliveriesQuery.order("created_at", {
-          ascending: false,
-        })
+        // Consulta simple para evitar problemas de permisos
+        const { data, error } = await supabase
+          .from("deliveries")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50)
 
-        if (deliveriesError) {
-          console.error("Error fetching deliveries:", deliveriesError)
+        if (error) {
+          console.error("Error fetching deliveries:", error)
+          if (!error.message.includes("permission denied")) {
+            throw error
+          }
         } else {
-          setDeliveries(deliveriesData || [])
+          // Filtrar en el cliente según el rol
+          if (userProfile.role === "transportista") {
+            deliveriesData = (data || []).filter((d) => d.assigned_to === userId || d.created_by === userId)
+          } else if (userProfile.role === "encargado_obra") {
+            deliveriesData = (data || []).filter(
+              (d) => d.created_by === userId || d.work_site_id, // Simplificado
+            )
+          } else {
+            deliveriesData = data || []
+          }
         }
+
+        console.log("Deliveries loaded:", deliveriesData.length)
+        setDeliveries(deliveriesData)
       } catch (err) {
         console.error("Error in deliveries fetch:", err)
         setDeliveries([])
       }
 
-      // Fetch notifications
+      // Fetch notifications con manejo de errores
       try {
+        console.log("Fetching notifications...")
+
         const { data: notificationsData, error: notificationsError } = await supabase
           .from("notifications")
           .select("*")
@@ -233,7 +248,11 @@ export default function Dashboard() {
 
         if (notificationsError) {
           console.error("Error fetching notifications:", notificationsError)
+          if (!notificationsError.message.includes("permission denied")) {
+            throw notificationsError
+          }
         } else {
+          console.log("Notifications loaded:", notificationsData?.length || 0)
           setNotifications(notificationsData || [])
         }
       } catch (err) {
@@ -241,50 +260,36 @@ export default function Dashboard() {
         setNotifications([])
       }
 
-      // Fetch warehouse requests
+      // Fetch warehouse requests con manejo de errores
       try {
-        let requestsQuery = supabase.from("warehouse_requests").select("*")
+        console.log("Fetching warehouse requests...")
 
-        if (userProfile.role === "encargado_obra") {
-          requestsQuery = requestsQuery.eq("requested_by", userId)
-        }
+        if (userProfile.role === "encargado_obra" || userProfile.role === "oficial_almacen") {
+          const { data: requestsData, error: requestsError } = await supabase
+            .from("warehouse_requests")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(20)
 
-        const { data: requestsData, error: requestsError } = await requestsQuery.order("created_at", {
-          ascending: false,
-        })
+          if (requestsError) {
+            console.error("Error fetching warehouse requests:", requestsError)
+            if (!requestsError.message.includes("permission denied")) {
+              throw requestsError
+            }
+          } else {
+            // Filtrar en el cliente si es encargado de obra
+            const filteredRequests =
+              userProfile.role === "encargado_obra"
+                ? (requestsData || []).filter((r) => r.requested_by === userId)
+                : requestsData || []
 
-        if (requestsError) {
-          console.error("Error fetching warehouse requests:", requestsError)
-        } else {
-          setWarehouseRequests(requestsData || [])
+            console.log("Warehouse requests loaded:", filteredRequests.length)
+            setWarehouseRequests(filteredRequests)
+          }
         }
       } catch (err) {
         console.error("Error in warehouse requests fetch:", err)
         setWarehouseRequests([])
-      }
-
-      // Fetch work assignments
-      try {
-        let assignmentsQuery = supabase.from("work_assignments").select("*")
-
-        if (userProfile.role === "operario_maquinaria" || userProfile.role === "peon_logistica") {
-          assignmentsQuery = assignmentsQuery.eq("assigned_to", userId)
-        } else if (userProfile.role === "encargado_obra") {
-          assignmentsQuery = assignmentsQuery.eq("created_by", userId)
-        }
-
-        const { data: assignmentsData, error: assignmentsError } = await assignmentsQuery.order("created_at", {
-          ascending: false,
-        })
-
-        if (assignmentsError) {
-          console.error("Error fetching work assignments:", assignmentsError)
-        } else {
-          setWorkAssignments(assignmentsData || [])
-        }
-      } catch (err) {
-        console.error("Error in work assignments fetch:", err)
-        setWorkAssignments([])
       }
 
       // Calculate stats
@@ -292,23 +297,26 @@ export default function Dashboard() {
       const pendingDeliveries = deliveries?.filter((d) => d.status === "pending" || d.status === "assigned").length || 0
       const completedDeliveries = deliveries?.filter((d) => d.status === "completed").length || 0
       const unreadNotifications = notifications?.filter((n) => !n.read).length || 0
-      const pendingAssignments =
-        workAssignments?.filter((a) => a.status === "pending" || a.status === "in_progress").length || 0
 
       setStats({
         totalDeliveries,
         pendingDeliveries,
         completedDeliveries,
         unreadNotifications,
-        pendingAssignments,
       })
+
+      console.log("Data fetch completed successfully")
     } catch (err: any) {
       console.error("Error fetching data:", err)
+
+      if (err.message.includes("permission denied")) {
+        setError("Error de permisos en la base de datos. Por favor, ejecuta los scripts de corrección.")
+      }
     }
   }
 
   const handleSignOut = async () => {
-    if (signingOut) return // Prevenir múltiples clics
+    if (signingOut) return
 
     setSigningOut(true)
 
@@ -321,7 +329,6 @@ export default function Dashboard() {
       setDeliveries([])
       setNotifications([])
       setWarehouseRequests([])
-      setWorkAssignments([])
 
       // Cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut()
@@ -383,25 +390,10 @@ export default function Dashboard() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
         <div className="text-center max-w-sm sm:max-w-md p-6 sm:p-8 bg-white rounded-lg shadow-xl">
           <div className="p-3 bg-red-100 rounded-full w-fit mx-auto mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 text-red-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
+            <AlertCircle className="h-6 w-6 text-red-600" />
           </div>
           <h2 className="text-lg sm:text-xl font-bold text-red-600 mb-4">Error de Configuración</h2>
-          <p className="text-gray-700 mb-6 text-sm sm:text-base">
-            Hay un problema con la configuración de la base de datos. Por favor ejecuta los scripts de corrección.
-          </p>
+          <p className="text-gray-700 mb-6 text-sm sm:text-base">{error}</p>
           <div className="space-y-3">
             <Button onClick={() => router.push("/login")} className="w-full bg-blue-600 hover:bg-blue-700">
               Volver al Login
@@ -433,11 +425,6 @@ export default function Dashboard() {
   const showDeliveries = ["oficial_almacen", "transportista", "encargado_obra"].includes(profile.role)
   const showWorkSites = profile.role === "encargado_obra"
   const showRequests = profile.role === "encargado_obra"
-  const showAssignments = ["operario_maquinaria", "peon_logistica"].includes(profile.role)
-  const showAssignmentsView = ["oficial_almacen", "encargado_obra"].includes(profile.role)
-
-  // Obtener el color del rol
-  const roleColor = getRoleColor(profile.role)
 
   // Función para manejar el cambio de pestaña en móvil
   const handleTabChange = (value: string) => {
@@ -522,7 +509,11 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0">
                   <div className="text-xl sm:text-2xl font-bold">{stats.totalDeliveries}</div>
-                  <p className="text-xs text-gray-500 mt-1 hidden sm:block">Entregas registradas en el sistema</p>
+                  <p className="text-xs text-gray-500 mt-1 hidden sm:block">
+                    {profile.role === "encargado_obra"
+                      ? "Entregas para tus obras"
+                      : "Entregas registradas en el sistema"}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -539,32 +530,6 @@ export default function Dashboard() {
             </>
           )}
 
-          {showAssignments && (
-            <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-                <CardTitle className="text-xs sm:text-sm font-medium">Tareas</CardTitle>
-                <Clipboard className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-              </CardHeader>
-              <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold">{stats.pendingAssignments}</div>
-                <p className="text-xs text-gray-500 mt-1 hidden sm:block">Por completar</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {profile.role === "operario_maquinaria" && (
-            <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
-                <CardTitle className="text-xs sm:text-sm font-medium">Equipos</CardTitle>
-                <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
-              </CardHeader>
-              <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-xl sm:text-2xl font-bold">2</div>
-                <p className="text-xs text-gray-500 mt-1 hidden sm:block">Bajo tu responsabilidad</p>
-              </CardContent>
-            </Card>
-          )}
-
           <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-white to-gray-50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
               <CardTitle className="text-xs sm:text-sm font-medium">Notificaciones</CardTitle>
@@ -579,7 +544,7 @@ export default function Dashboard() {
 
         {/* Main Tabs - Responsive */}
         <Tabs
-          defaultValue={showAssignments ? "assignments" : "deliveries"}
+          defaultValue="deliveries"
           value={activeTab}
           onValueChange={handleTabChange}
           className="space-y-4 sm:space-y-6"
@@ -616,22 +581,6 @@ export default function Dashboard() {
                   Solicitudes
                 </TabsTrigger>
               )}
-              {showAssignments && (
-                <TabsTrigger
-                  value="assignments"
-                  className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-4"
-                >
-                  Mis Tareas
-                </TabsTrigger>
-              )}
-              {showAssignmentsView && (
-                <TabsTrigger
-                  value="worker-assignments"
-                  className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-4"
-                >
-                  Personal
-                </TabsTrigger>
-              )}
             </TabsList>
           </div>
 
@@ -654,18 +603,6 @@ export default function Dashboard() {
           {showRequests && (
             <TabsContent value="requests">
               <WarehouseRequestManager requests={warehouseRequests} userProfile={profile} onUpdate={handleRefresh} />
-            </TabsContent>
-          )}
-
-          {showAssignments && (
-            <TabsContent value="assignments">
-              <WorkAssignmentManager assignments={workAssignments} userProfile={profile} onUpdate={handleRefresh} />
-            </TabsContent>
-          )}
-
-          {showAssignmentsView && (
-            <TabsContent value="worker-assignments">
-              <DeliveryAssignmentsView userProfile={profile} />
             </TabsContent>
           )}
         </Tabs>

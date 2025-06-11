@@ -1,3 +1,4 @@
+// Tema restaurado a la versión 23 - Solo roles originales
 export const theme = {
   roles: {
     oficial_almacen: {
@@ -17,18 +18,6 @@ export const theme = {
       secondary: "#ea580c",
       accent: "#fb923c",
       css: "bg-orange-100 text-orange-800",
-    },
-    operario_maquinaria: {
-      primary: "#7c3aed",
-      secondary: "#6d28d9",
-      accent: "#8b5cf6",
-      css: "bg-purple-100 text-purple-800",
-    },
-    peon_logistica: {
-      primary: "#0ea5e9",
-      secondary: "#0284c7",
-      accent: "#38bdf8",
-      css: "bg-sky-100 text-sky-800",
     },
   },
   status: {
@@ -59,10 +48,6 @@ export function getRoleLabel(role: string) {
       return "Transportista"
     case "encargado_obra":
       return "Encargado de Obra"
-    case "operario_maquinaria":
-      return "Operario de Maquinaria"
-    case "peon_logistica":
-      return "Peón de Logística"
     default:
       return role
   }
@@ -76,10 +61,6 @@ export function getRoleDescription(role: string) {
       return "Realiza entregas y transporta materiales entre ubicaciones"
     case "encargado_obra":
       return "Supervisa obras, solicita materiales y coordina trabajadores"
-    case "operario_maquinaria":
-      return "Opera y mantiene equipos y maquinaria especializada"
-    case "peon_logistica":
-      return "Apoya en tareas de carga, descarga y organización de materiales"
     default:
       return "Usuario del sistema"
   }

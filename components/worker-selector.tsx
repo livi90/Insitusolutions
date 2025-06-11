@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Settings, Users, Loader2 } from "lucide-react"
+import { Settings, Users, Loader2, AlertCircle } from "lucide-react"
 
 interface WorkerSelectorProps {
   open: boolean
@@ -31,33 +31,79 @@ export function WorkerSelector({
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
   const [taskTitle, setTaskTitle] = useState("")
   const [taskDescription, setTaskDescription] = useState("")
+  const [fetchingWorkers, setFetchingWorkers] = useState(false)
 
   useEffect(() => {
     if (open && deliveryId) {
       fetchWorkers()
       setTaskTitle(`Trabajo para entrega ${deliveryId.substring(0, 8)}`)
       setTaskDescription("Apoyo en la entrega de materiales")
+      setSelectedWorkers([]) // Limpiar selección previa
     }
   }, [open, deliveryId])
 
   const fetchWorkers = async () => {
-    setLoading(true)
+    setFetchingWorkers(true)
     try {
+      console.log("Fetching workers for assignment...")
+
+      // Intentar obtener trabajadores con roles específicos
       const { data, error } = await supabase
         .from("user_profiles")
         .select("id, full_name, role")
         .in("role", ["operario_maquinaria", "peon_logistica"])
         .order("full_name")
 
-      if (error) throw error
+      console.log("Workers query result:", { data, error })
 
-      setWorkers(
-        data.map((worker) => ({
-          id: worker.id,
-          name: worker.full_name,
-          role: worker.role,
-        })),
-      )
+      if (error) {
+        console.error("Error fetching workers:", error)
+        throw error
+      }
+
+      if (!data || data.length === 0) {
+        console.log("No workers found, trying alternative query...")
+
+        // Intentar consulta alternativa sin filtro de rol
+        const { data: allUsers, error: allUsersError } = await supabase
+          .from("user_profiles")
+          .select("id, full_name, role")
+          .order("full_name")
+
+        console.log("All users query result:", { data: allUsers, error: allUsersError })
+
+        if (allUsersError) throw allUsersError
+
+        // Filtrar manualmente los roles que necesitamos
+        const filteredWorkers = (allUsers || []).filter(
+          (user) => user.role === "operario_maquinaria" || user.role === "peon_logistica",
+        )
+
+        setWorkers(
+          filteredWorkers.map((worker) => ({
+            id: worker.id,
+            name: worker.full_name,
+            role: worker.role,
+          })),
+        )
+
+        if (filteredWorkers.length === 0) {
+          toast({
+            title: "Sin trabajadores",
+            description:
+              "No se encontraron operarios o peones de logística en el sistema. Verifica que existan usuarios con estos roles.",
+            variant: "destructive",
+          })
+        }
+      } else {
+        setWorkers(
+          data.map((worker) => ({
+            id: worker.id,
+            name: worker.full_name,
+            role: worker.role,
+          })),
+        )
+      }
     } catch (error: any) {
       console.error("Error fetching workers:", error)
       toast({
@@ -65,8 +111,9 @@ export function WorkerSelector({
         description: `Error al cargar trabajadores: ${error.message}`,
         variant: "destructive",
       })
+      setWorkers([])
     } finally {
-      setLoading(false)
+      setFetchingWorkers(false)
     }
   }
 
@@ -80,28 +127,52 @@ export function WorkerSelector({
       return
     }
 
+    if (!taskTitle.trim()) {
+      toast({
+        title: "Error",
+        description: "El título de la tarea es requerido",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
     try {
+      console.log("Creating work assignments:", {
+        deliveryId,
+        selectedWorkers,
+        taskTitle,
+        taskDescription,
+        userProfile: userProfile.id,
+      })
+
       // Crear asignaciones de trabajo para cada trabajador seleccionado
       const assignments = selectedWorkers.map((workerId) => ({
-        title: taskTitle,
-        description: taskDescription,
+        title: taskTitle.trim(),
+        description: taskDescription.trim() || null,
         assigned_to: workerId,
         created_by: userProfile.id,
         delivery_id: deliveryId,
         status: "pending",
       }))
 
-      const { error } = await supabase.from("work_assignments").insert(assignments)
+      console.log("Assignments to insert:", assignments)
 
-      if (error) throw error
+      const { data, error } = await supabase.from("work_assignments").insert(assignments).select()
+
+      console.log("Insert result:", { data, error })
+
+      if (error) {
+        console.error("Error inserting assignments:", error)
+        throw error
+      }
 
       toast({
         title: "Trabajadores asignados",
         description: `Se han asignado ${selectedWorkers.length} trabajadores a la entrega`,
       })
 
-      // Limpiar selección
+      // Limpiar formulario
       setSelectedWorkers([])
       setTaskTitle("")
       setTaskDescription("")
@@ -133,7 +204,7 @@ export function WorkerSelector({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="task-title">Título de la Tarea</Label>
+            <Label htmlFor="task-title">Título de la Tarea *</Label>
             <Input
               id="task-title"
               value={taskTitle}
@@ -150,21 +221,28 @@ export function WorkerSelector({
               value={taskDescription}
               onChange={(e) => setTaskDescription(e.target.value)}
               placeholder="Describe la tarea a realizar"
-              required
             />
           </div>
 
           <div className="space-y-2">
             <Label>Selecciona Trabajadores</Label>
-            {loading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                <span className="ml-2">Cargando trabajadores...</span>
+            {fetchingWorkers ? (
+              <div className="flex items-center justify-center py-8 border rounded-md">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+                  <p className="mt-2 text-sm text-gray-600">Cargando trabajadores...</p>
+                </div>
               </div>
             ) : workers.length === 0 ? (
-              <div className="text-center py-4 border rounded-md">
-                <Users className="h-8 w-8 mx-auto text-gray-400" />
-                <p className="mt-2 text-sm text-gray-500">No hay trabajadores disponibles</p>
+              <div className="text-center py-8 border rounded-md">
+                <AlertCircle className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                <p className="text-sm text-gray-500 mb-2">No hay trabajadores disponibles</p>
+                <p className="text-xs text-gray-400">
+                  Verifica que existan usuarios con roles "operario_maquinaria" o "peon_logistica"
+                </p>
+                <Button variant="outline" size="sm" onClick={fetchWorkers} className="mt-2">
+                  Reintentar
+                </Button>
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
@@ -189,11 +267,11 @@ export function WorkerSelector({
                       </div>
                       <Label
                         htmlFor={`worker-${worker.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 truncate"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 truncate cursor-pointer"
                       >
                         {worker.name}
                         <span className="text-xs text-gray-500 block">
-                          {worker.role === "operario_maquinaria" ? "Operario" : "Peón Logística"}
+                          {worker.role === "operario_maquinaria" ? "Operario de Maquinaria" : "Peón de Logística"}
                         </span>
                       </Label>
                     </div>
@@ -203,18 +281,21 @@ export function WorkerSelector({
             )}
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button onClick={handleAssignWorkers} disabled={loading || selectedWorkers.length === 0}>
+            <Button
+              onClick={handleAssignWorkers}
+              disabled={loading || selectedWorkers.length === 0 || !taskTitle.trim()}
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Asignando...
                 </>
               ) : (
-                "Asignar Trabajadores"
+                `Asignar ${selectedWorkers.length > 0 ? `(${selectedWorkers.length})` : ""}`
               )}
             </Button>
           </div>

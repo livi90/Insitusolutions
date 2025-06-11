@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Truck, Warehouse, HardHat, Loader2, CheckCircle, Settings, Users, Zap, MapPin, Building } from "lucide-react"
+import { Truck, Warehouse, HardHat, Loader2, CheckCircle, Zap, MapPin, Building } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getRoleColor, getRoleLabel, getRoleDescription } from "@/lib/theme"
 
@@ -188,10 +188,6 @@ export default function LoginPage() {
         return <Truck className="w-4 h-4 sm:w-5 sm:h-5" />
       case "encargado_obra":
         return <HardHat className="w-4 h-4 sm:w-5 sm:h-5" />
-      case "operario_maquinaria":
-        return <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
-      case "peon_logistica":
-        return <Users className="w-4 h-4 sm:w-5 sm:h-5" />
       default:
         return null
     }
@@ -391,13 +387,7 @@ export default function LoginPage() {
                           <SelectValue placeholder="Selecciona tu rol" />
                         </SelectTrigger>
                         <SelectContent>
-                          {[
-                            "oficial_almacen",
-                            "transportista",
-                            "encargado_obra",
-                            "operario_maquinaria",
-                            "peon_logistica",
-                          ].map((role) => {
+                          {["oficial_almacen", "transportista", "encargado_obra"].map((role) => {
                             const roleColor = getRoleColor(role)
                             return (
                               <SelectItem key={role} value={role}>
@@ -448,12 +438,12 @@ export default function LoginPage() {
           </Card>
         </div>
 
-        {/* Panel de Usuarios de Ejemplo - Responsive */}
+        {/* Panel de Usuarios de Ejemplo - Solo roles originales */}
         <div className="space-y-4 sm:space-y-6">
           <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 Usuarios de Prueba
               </CardTitle>
               <CardDescription className="text-sm sm:text-base">
@@ -475,13 +465,6 @@ export default function LoginPage() {
                   password: "obra123",
                   name: "Luis Encargado",
                 },
-                {
-                  role: "operario_maquinaria",
-                  email: "operario1@logistica.com",
-                  password: "maq123",
-                  name: "Roberto Operario",
-                },
-                { role: "peon_logistica", email: "peon1@logistica.com", password: "log123", name: "Pedro Peón" },
               ].map((user, index) => {
                 const roleColor = getRoleColor(user.role)
                 return (
@@ -521,13 +504,14 @@ export default function LoginPage() {
                 <div className="p-2 sm:p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full w-fit mx-auto mb-3 sm:mb-4">
                   <CheckCircle className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">¿Nuevo en el sistema?</h3>
+                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Sistema Restaurado</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-                  Crea tu propia cuenta usando el formulario de registro para acceder con tu rol específico.
+                  Todas las políticas han sido restauradas a la versión 23 funcional. Solo los 3 roles originales están
+                  disponibles.
                 </p>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                   <Zap className="h-3 w-3" />
-                  <span>Configuración automática de permisos</span>
+                  <span>Configuración estable y probada</span>
                 </div>
               </div>
             </CardContent>
