@@ -486,13 +486,13 @@ export default function LoginPage() {
                 {
                   role: "operario_maquinaria",
                   email: "operario1@logistica.com",
-                  password: "operario123",
+                  password: "maq123",
                   name: "Miguel Operario",
                 },
                 {
                   role: "peon_logistica",
                   email: "peon1@logistica.com",
-                  password: "peon123",
+                  password: "log123",
                   name: "José Peón",
                 },
               ].map((user, index) => {
@@ -538,14 +538,13 @@ export default function LoginPage() {
                 <div className="p-2 sm:p-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-full w-fit mx-auto mb-3 sm:mb-4">
                   <CheckCircle className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Recursión Corregida</h3>
+                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Logistica mejorada</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-                  El error de recursión infinita en las políticas ha sido resuelto. Ahora todos los roles funcionan
-                  correctamente.
+                  Mejora los tiempos de operaciones logisticas con solo unso clicks
                 </p>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                   <Zap className="h-3 w-3" />
-                  <span>Políticas simplificadas y estables</span>
+                  <span>Funcionalidades simplificadas y estables</span>
                 </div>
               </div>
             </CardContent>
