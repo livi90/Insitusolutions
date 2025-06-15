@@ -540,7 +540,7 @@ export default function LoginPage() {
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Logistica mejorada</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
-                  Mejora los tiempos de operaciones logisticas con solo unso clicks
+                  Mejora los tiempos de operaciones logisticas con solo unos clicks
                 </p>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                   <Zap className="h-3 w-3" />

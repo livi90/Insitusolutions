@@ -53,46 +53,61 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
       console.log("Fetching transporters for role:", userProfile.role)
 
       if (userProfile.role === "oficial_almacen") {
-        // Primero intentar con la función personalizada
+        // Método 1: Intentar con la función específica de transportistas
         try {
-          const { data: functionData, error: functionError } = await supabase.rpc(
-            "get_available_workers_for_assignment",
-          )
+          const { data: functionData, error: functionError } = await supabase.rpc("get_available_transporters")
 
           if (functionError) {
-            console.warn("Function call failed, trying direct query:", functionError)
+            console.warn("Function get_available_transporters failed:", functionError)
             throw functionError
           }
 
-          // Filtrar solo transportistas de la función
-          const transportersFromFunction = functionData?.filter((worker) => worker.role === "transportista") || []
-
-          if (transportersFromFunction.length > 0) {
-            console.log("Transporters from function:", transportersFromFunction)
-            setTransporters(transportersFromFunction)
+          if (functionData && functionData.length > 0) {
+            console.log("Transporters from specific function:", functionData)
+            setTransporters(functionData)
             return
           }
         } catch (funcError) {
-          console.warn("Function approach failed, trying direct query:", funcError)
+          console.warn("Specific function approach failed, trying general function:", funcError)
         }
 
-        // Si la función falla, intentar consulta directa
-        const { data: transportersData, error } = await supabase
+        // Método 2: Intentar con la función general
+        try {
+          const { data: generalData, error: generalError } = await supabase.rpc("get_available_workers_for_assignment")
+
+          if (generalError) {
+            console.warn("General function failed:", generalError)
+            throw generalError
+          }
+
+          const transportersFromGeneral = generalData?.filter((worker) => worker.role === "transportista") || []
+
+          if (transportersFromGeneral.length > 0) {
+            console.log("Transporters from general function:", transportersFromGeneral)
+            setTransporters(transportersFromGeneral)
+            return
+          }
+        } catch (generalError) {
+          console.warn("General function approach failed, trying direct query:", generalError)
+        }
+
+        // Método 3: Consulta directa como último recurso
+        const { data: directData, error: directError } = await supabase
           .from("user_profiles")
-          .select("*")
+          .select("id, full_name, email, role")
           .eq("role", "transportista")
           .order("full_name")
 
-        if (error) {
-          console.error("Error fetching transporters:", error)
-          setTransporters([])
-        } else {
-          console.log("Transporters from direct query:", transportersData)
-          setTransporters(transportersData || [])
+        if (directError) {
+          console.error("Direct query failed:", directError)
+          throw directError
         }
+
+        console.log("Transporters from direct query:", directData)
+        setTransporters(directData || [])
       }
     } catch (error: any) {
-      console.error("Error fetching transporters:", error)
+      console.error("All methods failed to fetch transporters:", error)
       setTransporters([])
       toast({
         title: "Advertencia",
@@ -167,7 +182,7 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
 
   const handleStatusUpdate = async (deliveryId: string, newStatus: string, assignedTo?: string) => {
     try {
-      const updateData: any = { status: newStatus }
+      const updateData: any = { status: newStatus, updated_at: new Date().toISOString() }
       if (assignedTo) {
         updateData.assigned_to = assignedTo
       }
@@ -185,9 +200,10 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
       })
       onUpdate()
     } catch (error: any) {
+      console.error("Error updating delivery status:", error)
       toast({
         title: "Error",
-        description: error.message,
+        description: `Error al actualizar estado: ${error.message}`,
         variant: "destructive",
       })
     }
@@ -197,26 +213,73 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
     try {
       console.log("Assigning transporter:", { deliveryId, transporterId })
 
-      // Usar la función personalizada para asignar transportista
-      const { data, error } = await supabase.rpc("assign_transporter_to_delivery", {
-        delivery_id: deliveryId,
-        transporter_id: transporterId,
-      })
+      // Método 1: Intentar con la función personalizada actualizada
+      try {
+        const { data, error } = await supabase.rpc("assign_transporter_to_delivery", {
+          p_delivery_id: deliveryId,
+          p_transporter_id: transporterId,
+        })
 
-      if (error) {
-        console.error("Error with function, trying direct update:", error)
-        // Si la función falla, intentar actualización directa
+        if (error) {
+          console.error("Function call failed:", error)
+          throw error
+        }
+
+        console.log("Function response:", data)
+
+        if (data && data.success) {
+          toast({
+            title: "Transportista asignado",
+            description: data.message || "El transportista ha sido asignado exitosamente",
+          })
+          onUpdate()
+          return
+        } else if (data && !data.success) {
+          throw new Error(data.error || "Error desconocido en la función")
+        }
+      } catch (funcError: any) {
+        console.error("Function method failed, trying direct update:", funcError)
+
+        // Método 2: Actualización directa como respaldo
         await handleStatusUpdate(deliveryId, "assigned", transporterId)
-      } else {
-        console.log("Transporter assigned successfully via function")
+
+        // Crear notificación manualmente usando la nueva función segura
+        try {
+          const { data: notifData, error: notifError } = await supabase.rpc("create_delivery_notification_safe", {
+            p_title: "Nueva entrega asignada",
+            p_message: "Se te ha asignado una nueva entrega para transportar",
+            p_type: "delivery_assigned",
+            p_user_id: transporterId,
+            p_delivery_id: deliveryId,
+          })
+
+          if (notifError) {
+            console.warn("Could not create notification via safe function:", notifError)
+            // Intentar inserción directa como último recurso
+            await supabase.from("notifications").insert({
+              id: crypto.randomUUID(),
+              title: "Nueva entrega asignada",
+              message: "Se te ha asignado una nueva entrega para transportar",
+              type: "delivery_assigned",
+              user_id: transporterId,
+              delivery_id: deliveryId,
+              read: false,
+              created_at: new Date().toISOString(),
+            })
+          } else {
+            console.log("Notification created successfully:", notifData)
+          }
+        } catch (notifError) {
+          console.warn("Could not create notification:", notifError)
+        }
+
         toast({
           title: "Transportista asignado",
           description: "El transportista ha sido asignado exitosamente",
         })
-        onUpdate()
       }
     } catch (error: any) {
-      console.error("Error assigning transporter:", error)
+      console.error("All methods failed:", error)
       toast({
         title: "Error",
         description: `Error al asignar transportista: ${error.message}`,
@@ -277,7 +340,7 @@ export function DeliveryManager({ deliveries, userProfile, onUpdate }: DeliveryM
             {userProfile.role === "oficial_almacen"
               ? "Administra las entregas, asigna transportistas y personal"
               : userProfile.role === "transportista"
-                ? "Entregas asignadas a ti"
+                ? "Entregas asignadas a ti - Puedes actualizar el estado"
                 : "Entregas relacionadas con tus obras"}
           </p>
         </div>
